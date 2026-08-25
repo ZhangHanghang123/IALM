@@ -31,8 +31,8 @@ export default function App() {
 
         {/* 基础数据 */}
         <Route path="/companies" element={<Companies />} />
-        <Route path="/assets" element={<Assets />} />
-        <Route path="/liabilities" element={<Liabilities />} />
+        <Route path="/assets-list" element={<Assets />} />
+        <Route path="/liabilities-list" element={<Liabilities />} />
         <Route path="/market-data" element={<MarketData />} />
 
         {/* 5号规则分析 */}

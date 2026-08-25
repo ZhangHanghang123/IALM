@@ -31,8 +31,8 @@ const menuItems = [
     icon: <DatabaseOutlined />,
     children: [
       { key: '/companies', label: '保险公司' },
-      { key: '/assets', icon: <DollarOutlined />, label: '资产端管理' },
-      { key: '/liabilities', icon: <BankOutlined />, label: '负债端管理' },
+      { key: '/assets-list', icon: <DollarOutlined />, label: '资产端管理' },
+      { key: '/liabilities-list', icon: <BankOutlined />, label: '负债端管理' },
       { key: '/market-data', label: '市场数据' },
     ],
   },
