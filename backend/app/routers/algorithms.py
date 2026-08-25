@@ -152,6 +152,7 @@ def aggregate_cashflows(
                 FROM ialm_asset_cashflow
                 WHERE company_id = :cid
                   AND scenario_code = :sc
+                  AND is_deleted = 0
                   AND period_year >= :sy AND period_year <= :ey
                 GROUP BY year_bucket
                 ORDER BY year_bucket ASC"""),
@@ -170,6 +171,7 @@ def aggregate_cashflows(
                 FROM ialm_liability_cashflow
                 WHERE company_id = :cid
                   AND scenario_code = :sc
+                  AND is_deleted = 0
                   AND period_year >= :sy AND period_year <= :ey
                 GROUP BY year_bucket
                 ORDER BY year_bucket ASC"""),
