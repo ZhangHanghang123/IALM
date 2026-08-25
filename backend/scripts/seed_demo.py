@@ -228,16 +228,16 @@ def main():
 
     # 7. 模型定义（14 项算法）
     models = [
-        ("ALG-001", "期限匹配率测算", "DURATION", "P0", "5号规则"),
-        ("ALG-002", "成本收益比测算", "COST_YIELD", "P0", "5号规则"),
-        ("ALG-003", "现金流回正期测算", "CASHFLOW", "P0", "5号规则"),
-        ("ALG-004", "久期与凸性测算", "DURATION", "P0", "5号规则"),
+        ("ALG-001", "期限匹配率测算", "MATCH", "P0", "5号规则"),
+        ("ALG-002", "成本收益比测算", "MATCH", "P0", "5号规则"),
+        ("ALG-003", "现金流回正期测算", "MATCH", "P0", "5号规则"),
+        ("ALG-004", "久期与凸性测算", "MATCH", "P0", "5号规则"),
         ("ALG-005", "现金流贴现预测", "CASHFLOW", "P0", ""),
         ("ALG-006", "蒙特卡洛随机情景", "STRESS", "P0", "6号规则"),
         ("ALG-007", "多因子冲击传导", "STRESS", "P0", "6号规则"),
         ("ALG-008", "Markowitz 配置", "INVESTMENT", "P1", ""),
         ("ALG-009", "Black-Litterman", "INVESTMENT", "P1", ""),
-        ("ALG-010", "Brinson 业绩归因", "INVESTMENT", "P2", ""),
+        ("ALG-010", "Brinson 业绩归因", "ATTRIBUTION", "P2", ""),
         ("ALG-011", "VaR/CVaR 风险度量", "RISK", "P1", ""),
         ("ALG-012", "动态复制免疫", "RISK", "P2", ""),
         ("ALG-013", "再保险现金流影响", "CASHFLOW", "P2", ""),
@@ -248,10 +248,9 @@ def main():
         if not cur.fetchone():
             cur.execute(
                 """INSERT INTO ialm_model_definition
-                (model_code, model_name, model_category, priority, regulatory_source,
-                 description, formula_text, status, is_deleted, created_by, updated_by, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, '见算法详细设计文档',
-                        1, 0, 'system', 'system', NOW(), NOW())""",
+                (model_code, model_name, category, priority, regulatory_code,
+                 description, status, is_deleted, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, 1, 0, NOW(), NOW())""",
                 (code, name, cat, prio, reg, f"{name}核心算法"),
             )
     print(f"✅ 模型定义 {len(models)} 条")

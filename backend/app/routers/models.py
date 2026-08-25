@@ -19,8 +19,8 @@ def list_model_definitions(
 ):
     """14 项核心算法模型定义"""
     rows = db.execute(
-        text("""SELECT id, model_code, model_name, model_category, priority, regulatory_source,
-                     description, formula_text, status
+        text("""SELECT id, model_code, model_name, category, priority, regulatory_code,
+                     description, algorithm_summary, status
               FROM ialm_model_definition WHERE is_deleted = 0
               ORDER BY priority, model_code LIMIT :limit OFFSET :offset"""),
         {"limit": page_size, "offset": (page - 1) * page_size},
@@ -30,8 +30,8 @@ def list_model_definitions(
         "total": total,
         "items": [
             {"id": r[0], "model_code": r[1], "model_name": r[2], "model_category": r[3],
-             "priority": r[4], "regulatory_source": r[5],
-             "description": r[6], "formula_text": r[7], "status": r[8]}
+             "priority": r[4], "regulatory_code": r[5],
+             "description": r[6], "algorithm_summary": r[7], "status": r[8]}
             for r in rows
         ],
     }
