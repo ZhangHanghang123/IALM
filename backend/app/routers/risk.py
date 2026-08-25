@@ -20,8 +20,9 @@ def list_preferences(
     _: dict = Depends(get_current_user),
 ):
     rows = db.execute(
-        text("""SELECT id, company_id, preference_level, max_drawdown, max_var, max_duration_gap,
-                     target_solvency_ratio, target_lcr, effective_date, approved_by
+        text("""SELECT id, company_id, preference_name, effective_date, expiry_date,
+                     duration_gap_min, duration_gap_max, duration_match_min,
+                     cashflow_payback_max, cost_yield_ratio_min
               FROM ialm_risk_preference WHERE is_deleted = 0
               ORDER BY company_id, effective_date DESC LIMIT :limit OFFSET :offset"""),
         {"limit": page_size, "offset": (page - 1) * page_size},
@@ -30,11 +31,12 @@ def list_preferences(
     return {
         "total": total,
         "items": [
-            {"id": r[0], "company_id": r[1], "preference_level": r[2],
-             "max_drawdown": float(r[3] or 0), "max_var": float(r[4] or 0),
-             "max_duration_gap": float(r[5] or 0), "target_solvency_ratio": float(r[6] or 0),
-             "target_lcr": float(r[7] or 0), "effective_date": r[8].isoformat() if r[8] else None,
-             "approved_by": r[9]}
+            {"id": r[0], "company_id": r[1], "preference_name": r[2],
+             "effective_date": r[3].isoformat() if r[3] else None,
+             "expiry_date": r[4].isoformat() if r[4] else None,
+             "duration_gap_min": float(r[5] or 0), "duration_gap_max": float(r[6] or 0),
+             "duration_match_min": float(r[7] or 0), "cashflow_payback_max": float(r[8] or 0),
+             "cost_yield_ratio_min": float(r[9] or 0)}
             for r in rows
         ],
     }

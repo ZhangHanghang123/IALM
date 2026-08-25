@@ -20,7 +20,8 @@ def list_product_categories(
     _: dict = Depends(get_current_user),
 ):
     rows = db.execute(
-        text("""SELECT id, category_code, category_name, parent_code, liability_type, status, remark
+        text("""SELECT id, product_type_code, product_type_name, parent_id, category_level,
+                     insurance_type, duration_type, payment_type, is_risk_account, sort_order
               FROM ialm_product_category WHERE is_deleted = 0
               ORDER BY id ASC LIMIT :limit OFFSET :offset"""),
         {"limit": page_size, "offset": (page - 1) * page_size},
@@ -29,19 +30,19 @@ def list_product_categories(
     return {
         "total": total,
         "items": [
-            {"id": r[0], "category_code": r[1], "category_name": r[2], "parent_code": r[3],
-             "liability_type": r[4], "status": r[5], "remark": r[6]}
+            {"id": r[0], "product_type_code": r[1], "product_type_name": r[2], "parent_id": r[3],
+             "category_level": r[4], "insurance_type": r[5], "duration_type": r[6],
+             "payment_type": r[7], "is_risk_account": r[8], "sort_order": r[9]}
             for r in rows
         ],
     }
 
 
 class ProductCategoryCreate(BaseModel):
-    category_code: str
-    category_name: str
-    parent_code: Optional[str] = ""
-    liability_type: str = "LIFE"
-    remark: Optional[str] = ""
+    product_type_code: str
+    product_type_name: str
+    parent_id: int = 0
+    insurance_type: str = "LIFE"
 
 
 @router.post("/product-categories")
@@ -50,32 +51,31 @@ def create_product_category(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    exists = db.execute(text("SELECT id FROM ialm_product_category WHERE category_code = :c AND is_deleted = 0"),
-                         {"c": body.category_code}).fetchone()
+    exists = db.execute(text("SELECT id FROM ialm_product_category WHERE product_type_code = :c AND is_deleted = 0"),
+                         {"c": body.product_type_code}).fetchone()
     if exists:
-        raise HTTPException(400, detail=f"产品分类 {body.category_code} 已存在")
+        raise HTTPException(400, detail=f"产品分类 {body.product_type_code} 已存在")
     rid = db.execute(
         text("""INSERT INTO ialm_product_category
-              (category_code, category_name, parent_code, liability_type, remark, status, is_deleted, created_by, updated_by, created_at, updated_at)
-              VALUES (:c, :n, :p, :t, :r, 1, 0, :u, :u, NOW(), NOW())"""),
-        {"c": body.category_code, "n": body.category_name, "p": body.parent_code or "",
-         "t": body.liability_type, "r": body.remark or "", "u": user.get("sub", "system")},
+              (product_type_code, product_type_name, parent_id, category_level, insurance_type,
+               is_deleted, created_at, updated_at)
+              VALUES (:c, :n, :p, 1, :t, 0, NOW(), NOW())"""),
+        {"c": body.product_type_code, "n": body.product_type_name, "p": body.parent_id,
+         "t": body.insurance_type},
     ).lastrowid
     db.commit()
-    return {"id": rid, "category_code": body.category_code}
+    return {"id": rid, "product_type_code": body.product_type_code}
 
 
 # ═══ 2. 保单主档（PolicyMaster） ═══
 class PolicyCreate(BaseModel):
     policy_no: str
     company_id: int
-    product_code: str
-    insured_amount: float = 0
-    premium: float = 0
-    policy_term: int = 0  # 保单年限
-    inception_date: Optional[str] = None  # YYYY-MM-DD
-    maturity_date: Optional[str] = None
-    status: str = "ACTIVE"
+    product_type_id: int
+    product_name: str = ""
+    sum_insured: float = 0
+    annual_premium: float = 0
+    insurance_period: int = 0
 
 
 @router.get("/policies")
@@ -95,12 +95,13 @@ def list_policies(
 
     rows = db.execute(
         text(f"""SELECT p.id, p.policy_no, p.company_id, c.company_short AS company_name,
-                     p.product_code, p.insured_amount, p.premium, p.policy_term,
-                     p.inception_date, p.maturity_date, p.status
+                     p.product_type_id, pc.product_type_name, p.sum_insured, p.annual_premium,
+                     p.payment_period, p.insurance_period, p.effective_date, p.maturity_date
               FROM ialm_policy_master p
               LEFT JOIN ialm_insurance_company c ON c.id = p.company_id AND c.is_deleted = 0
+              LEFT JOIN ialm_product_category pc ON pc.id = p.product_type_id AND pc.is_deleted = 0
               WHERE {where_sql}
-              ORDER BY p.insured_amount DESC LIMIT :limit OFFSET :offset"""),
+              ORDER BY p.sum_insured DESC LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     total = db.execute(text(f"SELECT COUNT(*) FROM ialm_policy_master p WHERE {where_sql}"), params).scalar() or 0
@@ -108,9 +109,11 @@ def list_policies(
         "total": total,
         "items": [
             {"id": r[0], "policy_no": r[1], "company_id": r[2], "company_name": r[3],
-             "product_code": r[4], "insured_amount": float(r[5] or 0), "premium": float(r[6] or 0),
-             "policy_term": r[7], "inception_date": r[8].isoformat() if r[8] else None,
-             "maturity_date": r[9].isoformat() if r[9] else None, "status": r[10]}
+             "product_type_id": r[4], "product_name": r[5],
+             "sum_insured": float(r[6] or 0), "annual_premium": float(r[7] or 0),
+             "payment_period": r[8], "insurance_period": r[9],
+             "effective_date": r[10].isoformat() if r[10] else None,
+             "maturity_date": r[11].isoformat() if r[11] else None}
             for r in rows
         ],
     }
@@ -128,13 +131,12 @@ def create_policy(
         raise HTTPException(400, detail=f"保单号 {body.policy_no} 已存在")
     rid = db.execute(
         text("""INSERT INTO ialm_policy_master
-              (policy_no, company_id, product_code, insured_amount, premium, policy_term,
-               inception_date, maturity_date, status, is_deleted, created_by, updated_by, created_at, updated_at)
-              VALUES (:no, :cid, :pc, :ia, :pr, :pt, :id, :md, :st, 1, 0, :u, :u, NOW(), NOW())"""),
-        {"no": body.policy_no, "cid": body.company_id, "pc": body.product_code,
-         "ia": body.insured_amount, "pr": body.premium, "pt": body.policy_term,
-         "id": body.inception_date or None, "md": body.maturity_date or None,
-         "st": body.status, "u": user.get("sub", "system")},
+              (policy_no, company_id, product_type_id, product_name, sum_insured, annual_premium,
+               payment_period, insurance_period, is_deleted, created_at, updated_at)
+              VALUES (:no, :cid, :ptid, :pn, :si, :ap, 0, :ip, 0, NOW(), NOW())"""),
+        {"no": body.policy_no, "cid": body.company_id, "ptid": body.product_type_id,
+         "pn": body.product_name, "si": body.sum_insured, "ap": body.annual_premium,
+         "ip": body.insurance_period},
     ).lastrowid
     db.commit()
     return {"id": rid, "policy_no": body.policy_no}

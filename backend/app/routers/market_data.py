@@ -19,9 +19,9 @@ def list_yield_curves(
 ):
     """收益率曲线列表"""
     rows = db.execute(
-        text("""SELECT id, curve_code, curve_name, curve_type, currency, effective_date, source
+        text("""SELECT id, curve_code, curve_name, curve_type, currency, data_source, created_at
               FROM ialm_yield_curve WHERE is_deleted = 0
-              ORDER BY effective_date DESC LIMIT :limit OFFSET :offset"""),
+              ORDER BY curve_code LIMIT :limit OFFSET :offset"""),
         {"limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     total = db.execute(text("SELECT COUNT(*) FROM ialm_yield_curve WHERE is_deleted = 0")).scalar() or 0
@@ -29,7 +29,8 @@ def list_yield_curves(
         "total": total,
         "items": [
             {"id": r[0], "curve_code": r[1], "curve_name": r[2], "curve_type": r[3],
-             "currency": r[4], "effective_date": r[5].isoformat() if r[5] else None, "source": r[6]}
+             "currency": r[4], "data_source": r[5],
+             "created_at": r[6].isoformat() if r[6] else None}
             for r in rows
         ],
     }
@@ -39,16 +40,18 @@ def list_yield_curves(
 def get_curve_points(curve_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     """收益率曲线点位数据"""
     rows = db.execute(
-        text("""SELECT id, tenor_years, tenor_label, rate, is_zero, is_par, is_forward
-              FROM ialm_yield_curve_point WHERE curve_id = :cid AND is_deleted = 0
-              ORDER BY tenor_years"""),
+        text("""SELECT id, curve_id, curve_date, tenor, rate
+              FROM ialm_yield_curve_point WHERE curve_id = :cid
+              ORDER BY tenor"""),
         {"cid": curve_id},
     ).fetchall()
     return {
         "curve_id": curve_id,
         "points": [
-            {"id": r[0], "tenor_years": float(r[1] or 0), "tenor_label": r[2],
-             "rate": float(r[3] or 0), "is_zero": r[4], "is_par": r[5], "is_forward": r[6]}
+            {"id": r[0], "curve_id": r[1],
+             "curve_date": r[2].isoformat() if r[2] else None,
+             "tenor_years": float(r[3] or 0),
+             "rate": float(r[4] or 0) / 100}
             for r in rows
         ],
     }

@@ -42,7 +42,8 @@ def list_categories(
 
     total = db.execute(text(f"SELECT COUNT(*) FROM ialm_asset_category WHERE {where_sql}"), params).scalar() or 0
     rows = db.execute(
-        text(f"""SELECT id, category_code, category_name, parent_code, risk_level, status, created_at
+        text(f"""SELECT id, category_code, category_name, parent_id, category_type, risk_weight,
+                     duration_default, status, created_at
               FROM ialm_asset_category WHERE {where_sql}
               ORDER BY id ASC LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
@@ -50,8 +51,10 @@ def list_categories(
     return {
         "total": total,
         "items": [
-            {"id": r[0], "category_code": r[1], "category_name": r[2], "parent_code": r[3],
-             "risk_level": r[4], "status": r[5], "created_at": r[6].isoformat() if r[6] else None}
+            {"id": r[0], "category_code": r[1], "category_name": r[2],
+             "parent_id": r[3], "category_type": r[4],
+             "risk_weight": float(r[5] or 0), "duration_default": float(r[6] or 0),
+             "status": r[7], "created_at": r[8].isoformat() if r[8] else None}
             for r in rows
         ],
     }
@@ -69,10 +72,11 @@ def create_category(
         raise HTTPException(400, detail=f"分类编码 {body.category_code} 已存在")
     rid = db.execute(
         text("""INSERT INTO ialm_asset_category
-              (category_code, category_name, parent_code, risk_level, status, is_deleted, created_by, updated_by, created_at, updated_at)
-              VALUES (:c, :n, :p, :r, 1, 0, :u, :u, NOW(), NOW())"""),
-        {"c": body.category_code, "n": body.category_name, "p": body.parent_code or "",
-         "r": body.risk_level, "u": user.get("sub", "system")},
+              (category_code, category_name, parent_id, category_type, risk_weight,
+               status, is_deleted, created_by, updated_by, created_at, updated_at)
+              VALUES (:c, :n, 0, :t, 0, 1, 0, :u, :u, NOW(), NOW())"""),
+        {"c": body.category_code, "n": body.category_name, "t": "OTHER",
+         "u": user.get("sub", "system")},
     ).lastrowid
     db.commit()
     return {"id": rid, "category_code": body.category_code}
@@ -107,29 +111,33 @@ def list_holdings(
         where.append("h.company_id = :cid")
         params["cid"] = company_id
     if category_code:
-        where.append("h.category_code = :cc")
+        where.append("ac.category_code = :cc")
         params["cc"] = category_code
     where_sql = " AND ".join(where)
 
     total = db.execute(text(f"SELECT COUNT(*) FROM ialm_asset_holding h WHERE {where_sql}"), params).scalar() or 0
     rows = db.execute(
-        text(f"""SELECT h.id, h.company_id, c.company_short AS company_name, h.category_code,
-                     h.holding_name, h.book_value, h.market_value, h.coupon_rate,
-                     h.duration_years, h.maturity_date, h.rating, h.currency, h.status
+        text(f"""SELECT h.id, h.company_id, c.company_short AS company_name, h.asset_code,
+                     h.asset_name, ac.category_code, ac.category_name,
+                     h.cost_value, h.market_value, h.coupon_rate, h.ytm,
+                     h.duration_year, h.maturity_date, h.credit_rating, h.currency
               FROM ialm_asset_holding h
               LEFT JOIN ialm_insurance_company c ON c.id = h.company_id AND c.is_deleted = 0
+              LEFT JOIN ialm_asset_category ac ON ac.id = h.category_id AND ac.is_deleted = 0
               WHERE {where_sql}
-              ORDER BY h.book_value DESC LIMIT :limit OFFSET :offset"""),
+              ORDER BY h.cost_value DESC LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     return {
         "total": total,
         "items": [
-            {"id": r[0], "company_id": r[1], "company_name": r[2], "category_code": r[3],
-             "holding_name": r[4], "book_value": float(r[5] or 0), "market_value": float(r[6] or 0),
-             "coupon_rate": float(r[7] or 0), "duration_years": float(r[8] or 0),
-             "maturity_date": r[9].isoformat() if r[9] else None,
-             "rating": r[10], "currency": r[11], "status": r[12]}
+            {"id": r[0], "company_id": r[1], "company_name": r[2], "asset_code": r[3],
+             "asset_name": r[4], "category_code": r[5], "category_name": r[6],
+             "cost_value": float(r[7] or 0), "market_value": float(r[8] or 0),
+             "coupon_rate": float(r[9] or 0), "ytm": float(r[10] or 0),
+             "duration_year": float(r[11] or 0),
+             "maturity_date": r[12].isoformat() if r[12] else None,
+             "credit_rating": r[13], "currency": r[14]}
             for r in rows
         ],
     }
