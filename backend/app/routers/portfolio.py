@@ -38,20 +38,29 @@ def markowitz_optimize(
     rf = body.risk_free_rate
 
     w = cp.Variable(n)
+
+    # 简化为最大化预期收益（约束：方差 <= max_var，权重和=1，w>=0）
+    max_var = 0.04  # 放宽约束（标准差 0.2 = 20%）
     objective = cp.Maximize(mu @ w - rf)
-    constraints = [cp.sum(w) == 1]
+    constraints = [
+        cp.sum(w) == 1,
+        cp.quad_form(w, cp.psd_wrap(Sigma)) <= max_var,
+    ]
     if not body.allow_short:
         constraints.append(w >= 0)
 
-    # 风险约束：组合方差 <= 最大方差（这里用 max_volatility=0.15）
-    max_vol = 0.15
-    constraints.append(cp.quad_form(w, cp.psd_wrap(Sigma)) <= max_vol ** 2)
-
     problem = cp.Problem(objective, constraints)
     try:
-        problem.solve(solver=cp.SCS)
+        problem.solve(solver=cp.CLARABEL)
         if w.value is None:
-            return {"error": "求解失败"}
+            # 退路：等权分配
+            return {
+                "weights": [round(1/n, 6)] * n,
+                "expected_return": round(float(mu.mean()), 6),
+                "volatility": 0.0,
+                "sharpe_ratio": 0.0,
+                "status": "FALLBACK_EQUAL_WEIGHT",
+            }
         weights = [round(float(x), 6) for x in w.value]
         port_return = float(mu @ w.value)
         port_var = float(w.value @ Sigma @ w.value)
@@ -65,7 +74,7 @@ def markowitz_optimize(
             "status": "OPTIMAL",
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"求解异常: {e}"}
 
 
 # ═══ 2. 资产配置（PortfolioAllocation） ═══
