@@ -157,10 +157,10 @@ def list_liability_cashflows(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
-    where = ["1=1"]
+    where = ["cf.is_deleted = 0"]
     params = {}
     if company_id:
-        where = ["company_id = :cid"]
+        where.append("cf.company_id = :cid")
         params["cid"] = company_id
     where_sql = " AND ".join(where)
 
@@ -176,7 +176,7 @@ def list_liability_cashflows(
               ORDER BY cf.company_id, cf.period_year, cf.period_number LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
-    total = db.execute(text(f"SELECT COUNT(*) FROM ialm_liability_cashflow WHERE {where_sql}"), params).scalar() or 0
+    total = db.execute(text(f"SELECT COUNT(*) FROM ialm_liability_cashflow cf WHERE {where_sql}"), params).scalar() or 0
     return {
         "total": total,
         "items": [

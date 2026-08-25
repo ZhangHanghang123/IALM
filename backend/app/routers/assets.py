@@ -191,13 +191,13 @@ def list_asset_cashflows(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
-    where = ["is_deleted = 0"]
+    where = ["cf.is_deleted = 0"]
     params = {}
     if company_id:
-        where.append("company_id = :cid")
+        where.append("cf.company_id = :cid")
         params["cid"] = company_id
     if holding_id is not None:
-        where.append("holding_id = :hid")
+        where.append("cf.holding_id = :hid")
         params["hid"] = holding_id
     where_sql = " AND ".join(where)
 
