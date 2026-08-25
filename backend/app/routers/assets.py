@@ -123,10 +123,17 @@ def list_holdings(
                      h.asset_code, h.asset_name,
                      ac.category_code, ac.category_name,
                      h.cost_value, h.market_value, h.coupon_rate, h.ytm,
-                     h.duration_year, h.maturity_date, h.credit_rating, h.currency
+                     h.duration_year, h.maturity_date, h.credit_rating, h.currency,
+                     h.face_value, h.issue_date,
+                     h.interest_payment_freq, h.interest_payment_unit,
+                     h.principal_payment_freq, h.principal_payment_unit,
+                     iu.unit_name AS interest_unit_name,
+                     pu.unit_name AS principal_unit_name
               FROM ialm_asset_holding h
               LEFT JOIN ialm_insurance_company c ON c.id = h.company_id AND c.is_deleted = 0
               LEFT JOIN ialm_asset_category ac ON ac.id = h.category_id AND ac.is_deleted = 0
+              LEFT JOIN ialm_period_unit_dict iu ON iu.unit_code = h.interest_payment_unit AND iu.is_deleted = 0
+              LEFT JOIN ialm_period_unit_dict pu ON pu.unit_code = h.principal_payment_unit AND pu.is_deleted = 0
               WHERE {where_sql}
               ORDER BY h.cost_value DESC LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
@@ -142,7 +149,15 @@ def list_holdings(
              "coupon_rate": float(r[11] or 0), "ytm": float(r[12] or 0),
              "duration_year": float(r[13] or 0),
              "maturity_date": r[14].isoformat() if r[14] else None,
-             "credit_rating": r[15], "currency": r[16]}
+             "credit_rating": r[15], "currency": r[16],
+             "face_value": float(r[17] or 0),
+             "issue_date": r[18].isoformat() if r[18] else None,
+             "interest_payment_freq": int(r[19] or 0),
+             "interest_payment_unit": r[20],
+             "principal_payment_freq": int(r[21] or 0),
+             "principal_payment_unit": r[22],
+             "interest_unit_name": r[23],
+             "principal_unit_name": r[24]}
             for r in rows
         ],
     }

@@ -148,7 +148,11 @@ function HoldingsTab({ holdings, viewCashflows }: any) {
               ) },
             { title: '资产分类', dataIndex: 'category_code', width: 150 },
             { title: '分类名称', dataIndex: 'category_name', width: 130 },
+            // === 计量字段（业务字段）===
+            { title: '起息日', dataIndex: 'issue_date', width: 110 },
             { title: '账面价值(万)', dataIndex: 'cost_value', width: 120,
+              render: (v: number) => v?.toLocaleString(undefined, { maximumFractionDigits: 0 }) },
+            { title: '面值(万)', dataIndex: 'face_value', width: 110,
               render: (v: number) => v?.toLocaleString(undefined, { maximumFractionDigits: 0 }) },
             { title: '市值(万)', dataIndex: 'market_value', width: 110,
               render: (v: number) => v?.toLocaleString(undefined, { maximumFractionDigits: 0 }) },
@@ -156,6 +160,30 @@ function HoldingsTab({ holdings, viewCashflows }: any) {
               render: (v: number) => `${(v * 100).toFixed(2)}%` },
             { title: '久期(年)', dataIndex: 'duration_year', width: 90,
               render: (v: number) => v?.toFixed(2) },
+            // === 还息频率：数值 + 单位 ===
+            { title: '还息频率', dataIndex: 'interest_payment_freq', width: 90,
+              render: (v: number, row: any) => v === 0 ? <span style={{ color: '#999' }}>无息</span> : v },
+            { title: '还息频率单位', dataIndex: 'interest_unit_name', width: 110,
+              render: (v: string, row: any) => v && row.interest_payment_freq > 0 ? <Tag color={
+                row.interest_payment_unit === 'DAY' ? 'magenta' :
+                row.interest_payment_unit === 'WEEK' ? 'purple' :
+                row.interest_payment_unit === 'MONTH' ? 'orange' :
+                row.interest_payment_unit === 'QUARTER' ? 'cyan' :
+                row.interest_payment_unit === 'HALF_YEAR' ? 'geekblue' :
+                row.interest_payment_unit === 'YEAR' ? 'blue' : 'default'
+              }>{v}</Tag> : <Tag>不适用</Tag> },
+            // === 还本频率：数值 + 单位 ===
+            { title: '还本频率', dataIndex: 'principal_payment_freq', width: 90,
+              render: (v: number) => v === 0 ? <span style={{ color: '#ff4d4f' }}>到期一次性</span> : v },
+            { title: '还本频率单位', dataIndex: 'principal_unit_name', width: 110,
+              render: (v: string, row: any) => v && row.principal_payment_freq > 0 ? <Tag color={
+                row.principal_payment_unit === 'DAY' ? 'magenta' :
+                row.principal_payment_unit === 'WEEK' ? 'purple' :
+                row.principal_payment_unit === 'MONTH' ? 'orange' :
+                row.principal_payment_unit === 'QUARTER' ? 'cyan' :
+                row.principal_payment_unit === 'HALF_YEAR' ? 'geekblue' :
+                row.principal_payment_unit === 'YEAR' ? 'blue' : 'default'
+              }>{v}</Tag> : <Tag>到期</Tag> },
             { title: '到期日', dataIndex: 'maturity_date', width: 110 },
             { title: '评级', dataIndex: 'credit_rating', width: 90,
               render: (v: string, row: any) => {
@@ -262,9 +290,21 @@ function CashflowsTab({
           <Space size={32} wrap>
             <div><span style={{ color: '#999' }}>资产名称：</span>{selectedHolding.asset_name}</div>
             <div><span style={{ color: '#999' }}>分类：</span>{selectedHolding.category_name || selectedHolding.category_code}</div>
+            <div><span style={{ color: '#999' }}>起息日：</span>{selectedHolding.issue_date || '-'}</div>
             <div><span style={{ color: '#999' }}>账面价值：</span>{selectedHolding.cost_value?.toLocaleString()} 万</div>
+            <div><span style={{ color: '#999' }}>面值：</span>{selectedHolding.face_value?.toLocaleString()} 万</div>
             <div><span style={{ color: '#999' }}>票面利率：</span>{(selectedHolding.coupon_rate * 100).toFixed(2)}%</div>
             <div><span style={{ color: '#999' }}>久期：</span>{selectedHolding.duration_year?.toFixed(2)} 年</div>
+            <div>
+              <span style={{ color: '#999' }}>还息频率：</span>
+              {selectedHolding.interest_payment_freq === 0 ? '无息' :
+                `每 ${selectedHolding.interest_payment_freq} ${selectedHolding.interest_unit_name || '年'} 1 次`}
+            </div>
+            <div>
+              <span style={{ color: '#999' }}>还本频率：</span>
+              {selectedHolding.principal_payment_freq === 0 ? '到期一次性' :
+                `每 ${selectedHolding.principal_payment_freq} ${selectedHolding.principal_unit_name || '年'} 1 次`}
+            </div>
             <div><span style={{ color: '#999' }}>到期日：</span>{selectedHolding.maturity_date}</div>
           </Space>
         </Card>
