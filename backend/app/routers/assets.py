@@ -193,18 +193,21 @@ def list_asset_cashflows(
     where_sql = " AND ".join(where)
 
     rows = db.execute(
-        text(f"""SELECT id, company_id, holding_id, period_year, period_month, amount, currency
+        text(f"""SELECT id, holding_id, company_id, asset_code, period_number, period_date,
+                     period_year, cashflow_type, amount, discount_factor, present_value, scenario_code
               FROM ialm_asset_cashflow WHERE {where_sql}
-              ORDER BY period_year, period_month LIMIT :limit OFFSET :offset"""),
+              ORDER BY period_year, period_number LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     total = db.execute(text(f"SELECT COUNT(*) FROM ialm_asset_cashflow WHERE {where_sql}"), params).scalar() or 0
     return {
         "total": total,
         "items": [
-            {"id": r[0], "company_id": r[1], "holding_id": r[2],
-             "period_year": r[3], "period_month": r[4], "amount": float(r[5] or 0),
-             "currency": r[6]}
+            {"id": r[0], "holding_id": r[1], "company_id": r[2], "asset_code": r[3],
+             "period_number": r[4], "period_date": r[5].isoformat() if r[5] else None,
+             "period_year": float(r[6] or 0), "cashflow_type": r[7],
+             "amount": float(r[8] or 0), "discount_factor": float(r[9] or 1),
+             "present_value": float(r[10] or 0), "scenario_code": r[11]}
             for r in rows
         ],
     }

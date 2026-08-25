@@ -470,6 +470,87 @@ CREATE TABLE IF NOT EXISTS ialm_liability_cashflow (
     INDEX idx_company_scenario (company_id, scenario_code, period_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='负债现金流';
 
+-- 4.9 产品-资产关联（多对多）
+CREATE TABLE IF NOT EXISTS ialm_product_asset_link (
+    id              BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    company_id      BIGINT        NOT NULL COMMENT '保险公司ID',
+    product_type_id BIGINT        NOT NULL COMMENT '产品类型ID',
+    asset_category_id BIGINT      NOT NULL COMMENT '资产分类ID',
+    allocation_pct  DECIMAL(6,4)  NOT NULL DEFAULT 0 COMMENT '配置比例(0~1)',
+    duration_match  DECIMAL(8,4)  NOT NULL DEFAULT 0 COMMENT '该账户预期久期',
+    remark          VARCHAR(256)  NOT NULL DEFAULT '',
+    is_deleted      TINYINT       NOT NULL DEFAULT 0,
+    created_by      BIGINT        DEFAULT NULL,
+    updated_by      BIGINT        DEFAULT NULL,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_link (company_id, product_type_id, asset_category_id),
+    INDEX idx_product (product_type_id),
+    INDEX idx_asset_cat (asset_category_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='产品-资产配置关联';
+
+-- 4.10 死亡率表（中国人寿保险业经验生命表 2010-2013）
+CREATE TABLE IF NOT EXISTS ialm_mortality_table (
+    id              BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    table_code      VARCHAR(64)   NOT NULL COMMENT '表编码: CL1-CL6/经验表',
+    table_name      VARCHAR(128)  NOT NULL COMMENT '表名称',
+    gender          VARCHAR(8)    NOT NULL COMMENT 'M/F/MIXED',
+    age_min         INT           NOT NULL DEFAULT 0,
+    age_max         INT           NOT NULL DEFAULT 120,
+    source          VARCHAR(128)  DEFAULT '' COMMENT '数据来源',
+    description     VARCHAR(512)  DEFAULT '',
+    is_deleted      TINYINT       NOT NULL DEFAULT 0,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_table_code (table_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='死亡率表';
+
+-- 4.11 死亡率表点
+CREATE TABLE IF NOT EXISTS ialm_mortality_table_point (
+    id              BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    table_id        BIGINT        NOT NULL,
+    age             INT           NOT NULL,
+    qx              DECIMAL(10,8) NOT NULL COMMENT '死亡率',
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_table_age (table_id, age)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='死亡率表点';
+
+-- 4.12 退保率假设
+CREATE TABLE IF NOT EXISTS ialm_lapse_rate (
+    id              BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    rate_code       VARCHAR(64)   NOT NULL COMMENT '退保率编码',
+    rate_name       VARCHAR(128)  NOT NULL,
+    product_type_id BIGINT        DEFAULT NULL,
+    policy_year_min INT           NOT NULL DEFAULT 1,
+    policy_year_max INT           NOT NULL DEFAULT 50,
+    rate_value      DECIMAL(8,6)  NOT NULL DEFAULT 0 COMMENT '退保率(小数)',
+    extra_json      JSON          DEFAULT NULL,
+    is_deleted      TINYINT       NOT NULL DEFAULT 0,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_rate_code (rate_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='退保率假设';
+
+-- 4.13 精算假设集
+CREATE TABLE IF NOT EXISTS ialm_actuarial_assumption (
+    id              BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    company_id      BIGINT        NOT NULL,
+    product_type_id BIGINT        DEFAULT NULL COMMENT '产品类型ID(空=全公司)',
+    assumption_set_code VARCHAR(64) NOT NULL COMMENT '假设集编码',
+    effective_date  DATE          NOT NULL COMMENT '生效日期',
+    expiry_date     DATE          DEFAULT NULL COMMENT '失效日期',
+    mortality_table_code VARCHAR(64) DEFAULT '' COMMENT '使用的死亡率表编码',
+    lapse_rate_code VARCHAR(64)   DEFAULT '' COMMENT '退保率假设编码',
+    expense_rate_code VARCHAR(64) DEFAULT '' COMMENT '费用率假设编码',
+    discount_rate   DECIMAL(6,4)  NOT NULL DEFAULT 0 COMMENT '折现率',
+    extra_json      JSON          DEFAULT NULL,
+    is_deleted      TINYINT       NOT NULL DEFAULT 0,
+    created_by      BIGINT        DEFAULT NULL,
+    updated_by      BIGINT        DEFAULT NULL,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_company_effective (company_id, effective_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='精算假设集';
+
 
 -- ============================================================
 -- Part 5: 市场数据域

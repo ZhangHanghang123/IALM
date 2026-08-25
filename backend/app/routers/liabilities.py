@@ -151,27 +151,29 @@ def list_liability_cashflows(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
-    where = ["is_deleted = 0"]
+    where = ["1=1"]
     params = {}
     if company_id:
-        where.append("company_id = :cid")
+        where = ["company_id = :cid"]
         params["cid"] = company_id
     where_sql = " AND ".join(where)
 
     rows = db.execute(
-        text(f"""SELECT id, company_id, policy_id, period_year, period_month, amount,
-                     benefit_type, currency
+        text(f"""SELECT id, company_id, product_type_id, period_number, period_date,
+                     period_year, cashflow_type, amount, discount_factor, present_value, scenario_code
               FROM ialm_liability_cashflow WHERE {where_sql}
-              ORDER BY period_year, period_month LIMIT :limit OFFSET :offset"""),
+              ORDER BY company_id, period_year, period_number LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     total = db.execute(text(f"SELECT COUNT(*) FROM ialm_liability_cashflow WHERE {where_sql}"), params).scalar() or 0
     return {
         "total": total,
         "items": [
-            {"id": r[0], "company_id": r[1], "policy_id": r[2],
-             "period_year": r[3], "period_month": r[4], "amount": float(r[5] or 0),
-             "benefit_type": r[6], "currency": r[7]}
+            {"id": r[0], "company_id": r[1], "product_type_id": r[2],
+             "period_number": r[3], "period_date": r[4].isoformat() if r[4] else None,
+             "period_year": float(r[5] or 0), "cashflow_type": r[6],
+             "amount": float(r[7] or 0), "discount_factor": float(r[8] or 1),
+             "present_value": float(r[9] or 0), "scenario_code": r[10]}
             for r in rows
         ],
     }
@@ -187,7 +189,7 @@ def list_reserves(
 ):
     rows = db.execute(
         text("""SELECT r.id, r.company_id, c.company_short, r.reserve_type,
-                     r.report_date, r.amount, r.currency, r.remark
+                     r.report_date, r.amount, r.currency, r.accounting_basis, r.product_type_id
               FROM ialm_reserve r
               LEFT JOIN ialm_insurance_company c ON c.id = r.company_id AND c.is_deleted = 0
               WHERE r.is_deleted = 0
@@ -200,7 +202,7 @@ def list_reserves(
         "items": [
             {"id": r[0], "company_id": r[1], "company_name": r[2], "reserve_type": r[3],
              "report_date": r[4].isoformat() if r[4] else None, "amount": float(r[5] or 0),
-             "currency": r[6], "remark": r[7]}
+             "currency": r[6], "accounting_basis": r[7], "product_type_id": r[8]}
             for r in rows
         ],
     }
@@ -215,19 +217,20 @@ def list_assumptions(
     _: dict = Depends(get_current_user),
 ):
     rows = db.execute(
-        text("""SELECT id, company_id, assumption_type, parameter_name,
-                     value_numeric, unit, effective_date, source
+        text("""SELECT id, company_id, assumption_set_code, discount_rate,
+                     effective_date, mortality_table_code, lapse_rate_code, expense_rate_code
               FROM ialm_actuarial_assumption WHERE is_deleted = 0
-              ORDER BY company_id, assumption_type LIMIT :limit OFFSET :offset"""),
+              ORDER BY company_id, assumption_set_code LIMIT :limit OFFSET :offset"""),
         {"limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     total = db.execute(text("SELECT COUNT(*) FROM ialm_actuarial_assumption WHERE is_deleted = 0")).scalar() or 0
     return {
         "total": total,
         "items": [
-            {"id": r[0], "company_id": r[1], "assumption_type": r[2], "parameter_name": r[3],
-             "value_numeric": float(r[4] or 0), "unit": r[5],
-             "effective_date": r[6].isoformat() if r[6] else None, "source": r[7]}
+            {"id": r[0], "company_id": r[1], "assumption_set_code": r[2],
+             "discount_rate": float(r[3] or 0),
+             "effective_date": r[4].isoformat() if r[4] else None,
+             "mortality_table_code": r[5], "lapse_rate_code": r[6], "expense_rate_code": r[7]}
             for r in rows
         ],
     }
