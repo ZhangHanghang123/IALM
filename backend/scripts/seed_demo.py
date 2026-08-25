@@ -134,23 +134,36 @@ def main():
         count = 0
         for cid in companies:
             for cat_code, cat_name, _, _, _, _, dur in categories[:5]:
-                cur.execute("SELECT id FROM ialm_asset_holding WHERE company_id=%s AND category_code=%s AND is_deleted=0",
-                            (cid, cat_code))
+                cur.execute("SELECT id FROM ialm_asset_holding WHERE company_id=%s AND asset_name=%s AND is_deleted=0",
+                            (cid, f"{cat_name} 持仓"))
                 if cur.fetchone():
                     continue
-                book = random.randint(50000, 500000)
+                cur.execute("SELECT id FROM ialm_asset_category WHERE category_code=%s", (cat_code,))
+                cat_row = cur.fetchone()
+                if not cat_row:
+                    continue
+                cat_id = cat_row[0]
+                book = round(random.uniform(50000, 500000), 4)
                 cur.execute(
                     """INSERT INTO ialm_asset_holding
-                    (company_id, category_code, holding_name, book_value, market_value,
-                     coupon_rate, duration_years, maturity_date, rating, currency,
-                     status, is_deleted, created_by, updated_by, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s,
-                            DATE_ADD(CURDATE(), INTERVAL %s DAY), %s, 'CNY',
-                            1, 0, 'system', 'system', NOW(), NOW())""",
-                    (cid, cat_code, f"{cat_name} 持仓",
-                     book, book, round(random.uniform(0.025, 0.045), 4),
+                    (company_id, asset_code, asset_name, category_id, asset_subtype,
+                     face_value, cost_value, market_value, coupon_rate, ytm,
+                     issue_date, maturity_date, duration_year, effective_duration, convexity,
+                     payment_freq, currency, credit_rating, is_deleted, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            DATE_SUB(CURDATE(), INTERVAL %s DAY),
+                            DATE_ADD(CURDATE(), INTERVAL %s DAY),
+                            %s, %s, %s, 1, 'CNY', %s, 0, NOW(), NOW())""",
+                    (cid, f"H{cid}{cat_code[:4]}{random.randint(1000, 9999)}",
+                     f"{cat_name} 持仓", cat_id, cat_code[:8],
+                     book, book, book,
+                     round(random.uniform(0.025, 0.045), 4),
+                     round(random.uniform(0.025, 0.045), 4),
+                     random.randint(365, 1825), random.randint(365, 3650),
                      round(random.uniform(2, 10), 2),
-                     random.randint(365, 3650), random.choice(["AAA", "AA+", "AA", "AA-", "A+"])),
+                     round(random.uniform(2, 10), 2),
+                     round(random.uniform(0, 50), 2),
+                     random.choice(["AAA", "AA+", "AA", "AA-", "A+"])),
                 )
                 count += 1
         print(f"✅ 资产持仓 {count} 条")
