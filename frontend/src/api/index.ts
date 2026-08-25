@@ -51,6 +51,7 @@ export const algorithmsApi = {
   list: () => api.get('/algorithms/rule5/algorithms'),
   fullAnalysis: (data: any) => api.post('/algorithms/rule5/full-analysis', data),
   history: (params?: any) => api.get('/algorithms/rule5/history', { params }),
+  aggregateCashflows: (params: any) => api.get('/algorithms/rule5/aggregate-cashflows', { params }),
 }
 
 // ═══ 资产端 ═══

@@ -1,51 +1,56 @@
 /**
- * IALM 5 号规则分析页
- * 输入资产/负债现金流 + 收益率 + 负债成本 → 调用算法 → 输出四项指标
+ * IALM 5 号规则分析页 - 综合分析
+ * 从「资产端管理 + 负债端管理」按时间区间聚合现金流 → 调用算法 → 输出四项指标
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Card, Form, InputNumber, Select, Button, Space, Row, Col, Alert, Tag, Statistic, message,
-  Table, Typography, Divider,
+  Table, Typography, Divider, Spin,
 } from 'antd'
-import { PlayCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined } from '@ant-design/icons'
-import { algorithmsApi } from '../api'
+import { PlayCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined, DownloadOutlined } from '@ant-design/icons'
+import { algorithmsApi, companiesApi } from '../api'
 
 const { Title, Text } = Typography
 
 interface CashflowRow {
   period_year: number
   amount: number
+  holding_count?: number
+  policy_count?: number
+  record_count?: number
 }
 
 export default function MatchAnalysis() {
   const [form] = Form.useForm()
   const [companyType, setCompanyType] = useState('LIFE')
-  const [assetCfs, setAssetCfs] = useState<CashflowRow[]>([
-    { period_year: 1, amount: 1000 },
-    { period_year: 3, amount: 2000 },
-    { period_year: 5, amount: 3000 },
-    { period_year: 10, amount: 5000 },
-    { period_year: 15, amount: 4000 },
-    { period_year: 20, amount: 2000 },
-  ])
-  const [liabilityCfs, setLiabilityCfs] = useState<CashflowRow[]>([
-    { period_year: 1, amount: 1200 },
-    { period_year: 3, amount: 1800 },
-    { period_year: 5, amount: 2800 },
-    { period_year: 10, amount: 5500 },
-    { period_year: 15, amount: 4500 },
-    { period_year: 20, amount: 1500 },
-  ])
+  const [startYear, setStartYear] = useState<number>(0)
+  const [endYear, setEndYear] = useState<number>(20)
+  const [scenarioCode, setScenarioCode] = useState<string>('BASE')
+  const [assetCfs, setAssetCfs] = useState<CashflowRow[]>([])
+  const [liabilityCfs, setLiabilityCfs] = useState<CashflowRow[]>([])
+  const [aggregateSummary, setAggregateSummary] = useState<any>(null)
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [aggregating, setAggregating] = useState(false)
+  const [companies, setCompanies] = useState<any[]>([])
+  const [companyId, setCompanyId] = useState<number>(1)
+
+  // 加载保险公司列表
+  useEffect(() => {
+    companiesApi.list({ page: 1, page_size: 100 }).then((r) => {
+      const items = r.data.items || []
+      setCompanies(items)
+      if (items.length > 0 && !items.find((c: any) => c.id === companyId)) {
+        setCompanyId(items[0].id)
+      }
+    }).catch(() => { /* 静默失败，保持默认值 */ })
+  }, [])
 
   const addRow = (type: 'asset' | 'liability') => {
-    const maxY = type === 'asset'
-      ? Math.max(0, ...assetCfs.map((c) => c.period_year))
-      : Math.max(0, ...liabilityCfs.map((c) => c.period_year))
-    const newRow = { period_year: maxY + 5, amount: 1000 }
-    if (type === 'asset') setAssetCfs([...assetCfs, newRow])
-    else setLiabilityCfs([...liabilityCfs, newRow])
+    const arr = type === 'asset' ? [...assetCfs] : [...liabilityCfs]
+    const maxY = arr.length > 0 ? Math.max(...arr.map((c) => c.period_year)) : 0
+    if (type === 'asset') setAssetCfs([...assetCfs, { period_year: maxY + 1, amount: 0 }])
+    else setLiabilityCfs([...liabilityCfs, { period_year: maxY + 1, amount: 0 }])
   }
 
   const updateRow = (type: 'asset' | 'liability', idx: number, key: keyof CashflowRow, value: number) => {
@@ -60,12 +65,50 @@ export default function MatchAnalysis() {
     else setLiabilityCfs(liabilityCfs.filter((_, i) => i !== idx))
   }
 
+  // 从基础数据按时间区间加载聚合现金流
+  const onLoadFromBase = async () => {
+    if (startYear >= endYear) {
+      message.error('起始年必须小于结束年')
+      return
+    }
+    setAggregating(true)
+    try {
+      const r = await algorithmsApi.aggregateCashflows({
+        company_id: companyId,
+        start_year: startYear,
+        end_year: endYear,
+        scenario_code: scenarioCode,
+      })
+      const data = r.data
+      // 后端返回字段已是 period_year + amount
+      const ac: CashflowRow[] = (data.asset_cashflows || []).map((d: any) => ({
+        period_year: d.period_year,
+        amount: d.amount,
+        holding_count: d.holding_count,
+        record_count: d.record_count,
+      }))
+      const lc: CashflowRow[] = (data.liability_cashflows || []).map((d: any) => ({
+        period_year: d.period_year,
+        amount: d.amount,
+        policy_count: d.policy_count,
+        record_count: d.record_count,
+      }))
+      setAssetCfs(ac)
+      setLiabilityCfs(lc)
+      setAggregateSummary(data.summary)
+      message.success(`已加载 ${ac.length} 期资产 + ${lc.length} 期负债现金流`)
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || '加载失败')
+    }
+    setAggregating(false)
+  }
+
   const onAnalyze = async () => {
     setLoading(true)
     try {
       const values = await form.validateFields()
       const r = await algorithmsApi.fullAnalysis({
-        company_id: 1,
+        company_id: companyId,
         company_type: companyType,
         asset_cashflows: assetCfs,
         liability_cashflows: liabilityCfs,
@@ -87,30 +130,43 @@ export default function MatchAnalysis() {
     title: string,
     type: 'asset' | 'liability',
     data: CashflowRow[],
+    countField: 'holding_count' | 'policy_count',
   ) => (
-    <Card title={title + ` (${data.length} 期)`} size="small" style={{ marginBottom: 12 }}
-      extra={<Button size="small" onClick={() => addRow(type)}>+ 添加期间</Button>}>
+    <Card
+      title={title + ` (${data.length} 期)`}
+      size="small"
+      style={{ marginBottom: 12 }}
+      extra={<Button size="small" onClick={() => addRow(type)}>+ 添加期间</Button>}
+    >
       <Table
         size="small"
         dataSource={data.map((d, i) => ({ ...d, idx: i }))}
         rowKey="idx"
         pagination={false}
+        scroll={{ y: 320 }}
         columns={[
           {
             title: '期数 (年)',
             dataIndex: 'period_year',
-            width: 120,
+            width: 110,
             render: (v: number, _: any, idx: number) => (
-              <InputNumber value={v} min={1} max={50} onChange={(e) => updateRow(type, idx, 'period_year', e as number)} style={{ width: 100 }} />
+              <InputNumber value={v} min={0} max={80} step={1} onChange={(e) => updateRow(type, idx, 'period_year', e as number)} style={{ width: 90 }} />
             ),
           },
           {
             title: '现金流 (万元)',
             dataIndex: 'amount',
+            width: 160,
             render: (v: number, _: any, idx: number) => (
-              <InputNumber value={v} min={0} step={100} onChange={(e) => updateRow(type, idx, 'amount', e as number)} style={{ width: 140 }} />
+              <InputNumber value={v} step={100} onChange={(e) => updateRow(type, idx, 'amount', e as number)} style={{ width: 140 }} />
             ),
           },
+          ...(data.length > 0 && data[0][countField] != null ? [{
+            title: type === 'asset' ? '持仓数' : '保单数',
+            dataIndex: countField,
+            width: 90,
+            render: (v: number) => v != null ? <Tag color="blue">{v}</Tag> : '-',
+          } as any] : []),
           {
             title: '操作',
             width: 80,
@@ -125,9 +181,94 @@ export default function MatchAnalysis() {
 
   return (
     <div>
-      <Title level={3}>📈 5 号规则三项核心分析</Title>
-      <Text type="secondary">输入资产/负债现金流 + 收益率 + 负债成本，输出四项核心监管指标</Text>
+      <Title level={3}>� 5 号规则综合分析</Title>
+      <Text type="secondary">从资产端管理 + 负债端管理 按时间区间聚合现金流 → 输出四项核心监管指标</Text>
 
+      {/* 时间区间 + 公司选择 + 加载 */}
+      <Card style={{ marginTop: 16 }} title="� 数据加载条件">
+        <Space wrap size="middle">
+          <div>
+            <Text type="secondary">保险公司：</Text>
+            <Select
+              value={companyId}
+              onChange={setCompanyId}
+              style={{ width: 180 }}
+              options={companies.map((c: any) => ({
+                value: c.id,
+                label: `${c.company_short || c.company_name}（${c.company_code}）`,
+              }))}
+            />
+          </div>
+          <div>
+            <Text type="secondary">起始年：</Text>
+            <InputNumber
+              value={startYear}
+              min={0}
+              max={80}
+              step={1}
+              onChange={(v) => setStartYear(v as number)}
+              addonAfter="年"
+              style={{ width: 120 }}
+            />
+          </div>
+          <div>
+            <Text type="secondary">结束年：</Text>
+            <InputNumber
+              value={endYear}
+              min={1}
+              max={80}
+              step={1}
+              onChange={(v) => setEndYear(v as number)}
+              addonAfter="年"
+              style={{ width: 120 }}
+            />
+          </div>
+          <div>
+            <Text type="secondary">情景：</Text>
+            <Select
+              value={scenarioCode}
+              onChange={setScenarioCode}
+              style={{ width: 130 }}
+              options={[
+                { value: 'BASE', label: '基准情景' },
+                { value: 'UP200', label: '利率上行200bp' },
+                { value: 'DOWN200', label: '利率下行200bp' },
+                { value: 'STRESS', label: '压力测试' },
+              ]}
+            />
+          </div>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            loading={aggregating}
+            onClick={onLoadFromBase}
+            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none' }}
+          >
+            从基础数据加载
+          </Button>
+        </Space>
+
+        {aggregateSummary && (
+          <Alert
+            style={{ marginTop: 12 }}
+            type="info"
+            showIcon
+            message={
+              <Space wrap>
+                <Tag color="purple">区间 [{aggregateSummary.start_year}, {aggregateSummary.end_year}] 年</Tag>
+                <Tag color="cyan">情景 {aggregateSummary.scenario_code}</Tag>
+                <Tag color="green">资产收入合计 {aggregateSummary.asset_total_in.toLocaleString()} 万元</Tag>
+                <Tag color="orange">负债支出合计 {aggregateSummary.liability_total_out.toLocaleString()} 万元</Tag>
+                <Tag color={aggregateSummary.net >= 0 ? 'green' : 'red'}>
+                  净现金流 {aggregateSummary.net >= 0 ? '+' : ''}{aggregateSummary.net.toLocaleString()} 万元
+                </Tag>
+              </Space>
+            }
+          />
+        )}
+      </Card>
+
+      {/* 分析参数 */}
       <Card style={{ marginTop: 16 }}>
         <Form form={form} layout="inline" initialValues={{ yieldRate: 4.5, costRate: 3.5, expenseRatio: 1.2, discountRate: 3.0 }}>
           <Form.Item label="公司类型" required>
@@ -154,24 +295,32 @@ export default function MatchAnalysis() {
         </Form>
       </Card>
 
-      <Row gutter={16} style={{ marginTop: 16 }}>
-        <Col span={12}>{renderCashflowTable('💰 资产端现金流', 'asset', assetCfs)}</Col>
-        <Col span={12}>{renderCashflowTable('📋 负债端现金流', 'liability', liabilityCfs)}</Col>
-      </Row>
+      {/* 现金流列表 */}
+      <Spin spinning={aggregating} tip="正在聚合基础数据...">
+        <Row gutter={16} style={{ marginTop: 16 }}>
+          <Col span={12}>{renderCashflowTable('💰 资产端现金流（资产端管理聚合）', 'asset', assetCfs, 'holding_count')}</Col>
+          <Col span={12}>{renderCashflowTable('� 负债端现金流（负债端管理聚合）', 'liability', liabilityCfs, 'policy_count')}</Col>
+        </Row>
+      </Spin>
 
       <Card style={{ marginTop: 16, textAlign: 'center' }}>
         <Button type="primary" size="large" loading={loading} icon={<PlayCircleOutlined />}
           onClick={onAnalyze}
+          disabled={assetCfs.length === 0 || liabilityCfs.length === 0}
           style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', minWidth: 200 }}
         >
           运行 5 号规则分析
         </Button>
+        {(assetCfs.length === 0 || liabilityCfs.length === 0) && (
+          <div style={{ marginTop: 8 }}>
+            <Text type="secondary">请先点击「从基础数据加载」按时间区间拉取现金流</Text>
+          </div>
+        )}
       </Card>
 
       {result && (
-        <Card title={`分析结果 - 总体: ${result.overall_status === 'PASS' ? '✅ 通过' : result.overall_status === 'WARN' ? '⚠️ 预警' : '❌ 不达标'}`} style={{ marginTop: 16 }}>
+        <Card title={`分析结果 - 总体: ${result.overall_status === 'PASS' ? '✅ 通过' : result.overall_status === 'WARN' ? '⚠️ 预警' : '� 不达标'}`} style={{ marginTop: 16 }}>
           <Row gutter={16}>
-            {/* ALG-001 */}
             <Col span={6}>
               <Card size="small">
                 <Statistic
@@ -185,7 +334,6 @@ export default function MatchAnalysis() {
                 <Text> 状态: {result.alg_001_duration_match.status}</Text>
               </Card>
             </Col>
-            {/* ALG-002 */}
             <Col span={6}>
               <Card size="small">
                 <Statistic
@@ -199,7 +347,6 @@ export default function MatchAnalysis() {
                 <Text> 状态: {result.alg_002_cost_yield.status}</Text>
               </Card>
             </Col>
-            {/* ALG-003 */}
             <Col span={6}>
               <Card size="small">
                 <Statistic
@@ -213,7 +360,6 @@ export default function MatchAnalysis() {
                 <Text> 状态: {result.alg_003_cashflow_payback.status}</Text>
               </Card>
             </Col>
-            {/* ALG-004 */}
             <Col span={6}>
               <Card size="small">
                 <Statistic

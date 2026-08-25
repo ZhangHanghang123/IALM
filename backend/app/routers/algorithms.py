@@ -1,8 +1,9 @@
 """IALM 算法路由：5号规则 + 14 项核心"""
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from ..database import get_db
 from ..security import get_current_user
 from ..models import IalmMatchAnalysis
@@ -113,6 +114,100 @@ def list_algorithms(_: dict = Depends(get_current_user)):
             {"id": "ALG-014", "name": "久期匹配资产负债管理", "category": "组合管理", "threshold": "-"},
         ],
         "total": 14,
+    }
+
+
+@router.get("/rule5/aggregate-cashflows")
+def aggregate_cashflows(
+    company_id: int = Query(..., description="保险公司ID"),
+    start_year: float = Query(0, ge=0, le=80, description="起始期数(年)"),
+    end_year: float = Query(20, ge=0.1, le=80, description="结束期数(年)"),
+    scenario_code: str = Query("BASE", description="情景: BASE/UP200/DOWN200/STRESS"),
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """
+    从基础数据聚合现金流（供 5 号规则综合分析使用）
+
+    资产端：在 [start_year, end_year] 区间内按 period_year 汇总 ialm_asset_cashflow
+           金额(万元) → 资产收入(正数)
+    负债端：在 [start_year, end_year] 区间内按 period_year 汇总 ialm_liability_cashflow
+           金额(万元) → 负债支出(取绝对值，正数)
+
+    返回：
+    - asset_cashflows:     [{period_year, amount, holding_count}]
+    - liability_cashflows: [{period_year, amount, policy_count}]
+    - summary:             聚合统计（持仓/保单/原始记录数/总流入/总流出）
+    """
+    if start_year >= end_year:
+        raise HTTPException(400, detail="start_year 必须小于 end_year")
+
+    # ═══ 资产端聚合（按 period_year 汇总 COUPON+PRINCIPAL+REINVEST+TOTAL 等正流入） ═══
+    asset_rows = db.execute(
+        text("""SELECT
+                  FLOOR(period_year) AS year_bucket,
+                  SUM(amount)        AS total_amount,
+                  COUNT(DISTINCT holding_id) AS holding_count,
+                  COUNT(*)           AS record_count
+                FROM ialm_asset_cashflow
+                WHERE company_id = :cid
+                  AND scenario_code = :sc
+                  AND period_year >= :sy AND period_year <= :ey
+                GROUP BY year_bucket
+                ORDER BY year_bucket ASC"""),
+        {"cid": company_id, "sc": scenario_code, "sy": start_year, "ey": end_year},
+    ).fetchall()
+
+    asset_total_in = sum(float(r[1] or 0) for r in asset_rows)
+
+    # ═══ 负债端聚合（按 period_year 汇总，取绝对值代表支出） ═══
+    liab_rows = db.execute(
+        text("""SELECT
+                  FLOOR(period_year) AS year_bucket,
+                  SUM(amount)        AS total_amount,
+                  COUNT(DISTINCT policy_id) AS policy_count,
+                  COUNT(*)           AS record_count
+                FROM ialm_liability_cashflow
+                WHERE company_id = :cid
+                  AND scenario_code = :sc
+                  AND period_year >= :sy AND period_year <= :ey
+                GROUP BY year_bucket
+                ORDER BY year_bucket ASC"""),
+        {"cid": company_id, "sc": scenario_code, "sy": start_year, "ey": end_year},
+    ).fetchall()
+
+    liab_total_out = sum(float(r[1] or 0) for r in liab_rows)
+
+    return {
+        "asset_cashflows": [
+            {
+                "period_year": int(r[0]),
+                "amount": round(float(r[1] or 0), 4),
+                "holding_count": int(r[2] or 0),
+                "record_count": int(r[3] or 0),
+            }
+            for r in asset_rows
+        ],
+        "liability_cashflows": [
+            {
+                "period_year": int(r[0]),
+                "amount": round(float(r[1] or 0), 4),
+                "policy_count": int(r[2] or 0),
+                "record_count": int(r[3] or 0),
+            }
+            for r in liab_rows
+        ],
+        "summary": {
+            "company_id": company_id,
+            "scenario_code": scenario_code,
+            "start_year": start_year,
+            "end_year": end_year,
+            "asset_total_in": round(asset_total_in, 4),
+            "liability_total_out": round(liab_total_out, 4),
+            "net": round(asset_total_in - liab_total_out, 4),
+            "asset_year_count": len(asset_rows),
+            "liability_year_count": len(liab_rows),
+        },
     }
 
 
