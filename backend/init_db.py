@@ -98,18 +98,18 @@ def seed_data():
 
         # 2. 示例保险公司（与 IALMD 共享金管局机构编码）
         sample_companies = [
-            ("000001", "中国人寿保险股份有限公司", "国寿", "LIFE", 28260000.00, 1),
-            ("000002", "中国平安人寿保险股份有限公司", "平安", "LIFE", 3380000.00, 1),
-            ("000003", "中国太平洋人寿保险股份有限公司", "太保", "LIFE", 8420000.00, 1),
-            ("000004", "新华人寿保险股份有限公司", "新华", "LIFE", 3115000.00, 1),
-            ("000005", "中国人寿财产保险股份有限公司", "国寿财险", "PROPERTY", 1880000.00, 0),
-            ("000006", "中国平安财产保险股份有限公司", "平安财险", "PROPERTY", 2100000.00, 0),
-            ("000007", "中国太平洋财产保险股份有限公司", "太保财险", "PROPERTY", 1947000.00, 0),
-            ("000008", "中国人寿再保险有限责任公司", "中再寿险", "REINSURANCE", 4500000.00, 0),
-            ("000009", "中国财产再保险有限责任公司", "中再财险", "REINSURANCE", 1100000.00, 0),
-            ("000010", "泰康人寿保险有限责任公司", "泰康", "LIFE", 9999997.00, 0),
+            ("000001", "中国人寿保险股份有限公司", "国寿", "LIFE", 28260000.00, "A"),
+            ("000002", "中国平安人寿保险股份有限公司", "平安", "LIFE", 3380000.00, "A"),
+            ("000003", "中国太平洋人寿保险股份有限公司", "太保", "LIFE", 8420000.00, "A"),
+            ("000004", "新华人寿保险股份有限公司", "新华", "LIFE", 3115000.00, "A"),
+            ("000005", "中国人寿财产保险股份有限公司", "国寿财险", "PROPERTY", 1880000.00, "A"),
+            ("000006", "中国平安财产保险股份有限公司", "平安财险", "PROPERTY", 2100000.00, "A"),
+            ("000007", "中国太平洋财产保险股份有限公司", "太保财险", "PROPERTY", 1947000.00, "A"),
+            ("000008", "中国人寿再保险有限责任公司", "中再寿险", "REINSURANCE", 4500000.00, "B"),
+            ("000009", "中国财产再保险有限责任公司", "中再财险", "REINSURANCE", 1100000.00, "B"),
+            ("000010", "泰康人寿保险有限责任公司", "泰康", "LIFE", 9999997.00, "B"),
         ]
-        for code, name, short, ctype, capital, listed in sample_companies:
+        for code, name, short, ctype, capital, rating in sample_companies:
             exists = session.query(IalmInsuranceCompany).filter(
                 IalmInsuranceCompany.company_code == code
             ).first()
@@ -117,10 +117,14 @@ def seed_data():
                 c = IalmInsuranceCompany(
                     company_code=code,
                     company_name=name,
-                    short_name=short,
+                    company_short=short,
                     company_type=ctype,
                     registered_capital=capital,
-                    is_listed=listed,
+                    regulatory_rating=rating,
+                    business_scope="保险业务",
+                    address="北京市",
+                    contact_phone="010-00000000",
+                    website="https://example.com",
                     created_by="system",
                 )
                 session.add(c)

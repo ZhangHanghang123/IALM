@@ -33,17 +33,21 @@ class SysUser(Base, TimestampMixin):
 
 # ═══ 业务表（ialm_ 前缀） ═══
 class IalmInsuranceCompany(Base, TimestampMixin):
-    """保险公司主档"""
+    """保险公司主档（字段与 sql/init.sql 一致）"""
     __tablename__ = "ialm_insurance_company"
-    company_code = Column(String(32), unique=True, nullable=False, index=True, comment="金管局6位机构编码")
+    company_code = Column(String(32), unique=True, nullable=False, index=True, comment="金监局6位机构编码")
     company_name = Column(String(128), nullable=False)
-    short_name = Column(String(32))
-    company_type = Column(String(32), comment="LIFE/PROPERTY/REINSURANCE/HEALTH")
-    registered_capital = Column(Numeric(18, 2), comment="注册资本（万元）")
+    company_short = Column(String(64), default="", comment="公司简称")
+    company_type = Column(String(16), comment="LIFE/PROPERTY/HEALTH/REINSURANCE/GROUP")
+    legal_rep = Column(String(64), default="", comment="法定代表人")
+    registered_capital = Column(Numeric(18, 2), default=0, comment="注册资本（万元）")
     established_at = Column(DateTime, comment="成立日期")
-    regulator_code = Column(String(32))
-    is_listed = Column(Integer, default=0, comment="是否上市 0:否 1:A股 2:港股 3:其他")
-    remark = Column(Text)
+    business_scope = Column(String(512), default="", comment="经营范围")
+    address = Column(String(256), default="", comment="注册地址")
+    contact_phone = Column(String(20), default="", comment="联系电话")
+    website = Column(String(128), default="", comment="官网")
+    regulatory_rating = Column(String(16), default="", comment="A/B/C/D")
+    risk_preference_id = Column(Integer, comment="风险偏好ID")
 
 
 class IalmMatchAnalysis(Base, TimestampMixin):

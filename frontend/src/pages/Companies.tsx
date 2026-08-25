@@ -34,7 +34,7 @@ export default function Companies() {
   const columns = [
     { title: '机构编码', dataIndex: 'company_code', width: 120 },
     { title: '公司名称', dataIndex: 'company_name' },
-    { title: '简称', dataIndex: 'short_name', width: 100 },
+    { title: '简称', dataIndex: 'company_short', width: 100 },
     {
       title: '类型',
       dataIndex: 'company_type',
@@ -42,10 +42,10 @@ export default function Companies() {
       render: (v: string) => <Tag color={typeMap[v]?.color}>{typeMap[v]?.text || v}</Tag>,
     },
     {
-      title: '上市',
-      dataIndex: 'is_listed',
-      width: 80,
-      render: (v: number) => v === 1 ? <Tag color="green">A 股</Tag> : v === 2 ? <Tag color="blue">港股</Tag> : <Tag>未上市</Tag>,
+      title: '监管评级',
+      dataIndex: 'regulatory_rating',
+      width: 100,
+      render: (v: string) => v ? <Tag color={v === 'A' ? 'green' : v === 'B' ? 'blue' : 'orange'}>{v}</Tag> : '-',
     },
     {
       title: '注册资本',

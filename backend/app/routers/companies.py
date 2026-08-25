@@ -14,22 +14,30 @@ router = APIRouter(prefix="/companies", tags=["保险公司"])
 class CompanyCreate(BaseModel):
     company_code: str
     company_name: str
-    short_name: Optional[str] = None
+    company_short: Optional[str] = ""
     company_type: Optional[str] = "LIFE"
-    registered_capital: Optional[float] = None
+    legal_rep: Optional[str] = ""
+    registered_capital: Optional[float] = 0
     established_at: Optional[str] = None
-    is_listed: int = 0
-    remark: Optional[str] = None
+    business_scope: Optional[str] = ""
+    address: Optional[str] = ""
+    contact_phone: Optional[str] = ""
+    website: Optional[str] = ""
+    regulatory_rating: Optional[str] = ""
 
 
 class CompanyUpdate(BaseModel):
     company_name: Optional[str] = None
-    short_name: Optional[str] = None
+    company_short: Optional[str] = None
     company_type: Optional[str] = None
+    legal_rep: Optional[str] = None
     registered_capital: Optional[float] = None
-    is_listed: Optional[int] = None
+    business_scope: Optional[str] = None
+    address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    website: Optional[str] = None
+    regulatory_rating: Optional[str] = None
     status: Optional[int] = None
-    remark: Optional[str] = None
 
 
 @router.get("")
@@ -47,7 +55,7 @@ def list_companies(
         like = f"%{keyword}%"
         q = q.filter(or_(
             IalmInsuranceCompany.company_name.like(like),
-            IalmInsuranceCompany.short_name.like(like),
+            IalmInsuranceCompany.company_short.like(like),
             IalmInsuranceCompany.company_code.like(like),
         ))
     if company_type:
@@ -61,10 +69,11 @@ def list_companies(
                 "id": c.id,
                 "company_code": c.company_code,
                 "company_name": c.company_name,
-                "short_name": c.short_name,
+                "company_short": c.company_short,
                 "company_type": c.company_type,
-                "registered_capital": float(c.registered_capital) if c.registered_capital else None,
-                "is_listed": c.is_listed,
+                "legal_rep": c.legal_rep,
+                "registered_capital": float(c.registered_capital) if c.registered_capital else 0,
+                "regulatory_rating": c.regulatory_rating,
                 "status": c.status,
             }
             for c in items
@@ -88,11 +97,15 @@ def create_company(
     c = IalmInsuranceCompany(
         company_code=body.company_code,
         company_name=body.company_name,
-        short_name=body.short_name,
+        company_short=body.company_short or "",
         company_type=body.company_type,
-        registered_capital=body.registered_capital,
-        is_listed=body.is_listed,
-        remark=body.remark,
+        legal_rep=body.legal_rep or "",
+        registered_capital=body.registered_capital or 0,
+        business_scope=body.business_scope or "",
+        address=body.address or "",
+        contact_phone=body.contact_phone or "",
+        website=body.website or "",
+        regulatory_rating=body.regulatory_rating or "",
         created_by=user.get("sub", "system"),
     )
     db.add(c)
