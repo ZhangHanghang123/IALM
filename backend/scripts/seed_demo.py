@@ -88,10 +88,10 @@ def main():
 
     # 3. 收益率曲线（中债国债 + 信用债）
     curves = [
-        ("CN-GB-2025", "中债国债收益率曲线", "GOVERNMENT", "CNY"),
-        ("CN-FIN-2025", "中债金融债收益率曲线", "FINANCIAL", "CNY"),
-        ("CN-CORP-2025", "中债企业债收益率曲线", "CORPORATE", "CNY"),
-        ("CN-CREDIT-AAA", "中债高等级信用债曲线", "CREDIT", "CNY"),
+        ("CN-GB-2025", "中债国债收益率曲线", "SPOT", "CNY"),
+        ("CN-FIN-2025", "中债金融债收益率曲线", "SPOT", "CNY"),
+        ("CN-CORP-2025", "中债企业债收益率曲线", "SPOT", "CNY"),
+        ("CN-CREDIT-AAA", "中债高等级信用债曲线", "SPOT", "CNY"),
     ]
     for code, name, ctype, ccy in curves:
         cur.execute("SELECT id FROM ialm_yield_curve WHERE curve_code = %s", (code,))
@@ -99,9 +99,9 @@ def main():
         if not row:
             cur.execute(
                 """INSERT INTO ialm_yield_curve
-                (curve_code, curve_name, curve_type, currency, effective_date, source,
-                 status, is_deleted, created_by, updated_by, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, CURDATE(), '中债登', 1, 0, 'system', 'system', NOW(), NOW())""",
+                (curve_code, curve_name, curve_type, currency, data_source,
+                 description, is_deleted, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, 'WIND', '', 0, NOW(), NOW())""",
                 (code, name, ctype, ccy),
             )
             curve_id = cur.lastrowid
@@ -114,15 +114,15 @@ def main():
             tenors = [(0.083, '3M'), (0.25, '6M'), (0.5, '1Y'), (1, '2Y'),
                       (3, '3Y'), (5, '5Y'), (7, '7Y'), (10, '10Y'),
                       (20, '20Y'), (30, '30Y')]
-            base_rate = 0.025 if ctype == 'GOVERNMENT' else 0.030 if ctype == 'FINANCIAL' else 0.035
+            base_rate = 0.025 if ctype == 'SPOT' and 'GB' in code else 0.030 if 'FIN' in code else 0.035
             for ty, label in tenors:
                 rate = base_rate + 0.002 * ty + random.uniform(-0.001, 0.001)
                 cur.execute(
                     """INSERT INTO ialm_yield_curve_point
-                    (curve_id, tenor_years, tenor_label, rate, is_zero, is_par, is_forward,
-                     status, is_deleted, created_by, updated_by, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, 1, 0, 0, 1, 0, 'system', 'system', NOW(), NOW())""",
-                    (curve_id, ty, label, round(rate, 6)),
+                    (curve_id, curve_date, tenor, rate, created_at)
+                    VALUES (%s, CURDATE(), %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE rate = VALUES(rate)""",
+                    (curve_id, ty, round(rate, 4)),
                 )
     print(f"✅ 收益率曲线 {len(curves)} 条 + 40 个点位")
 
