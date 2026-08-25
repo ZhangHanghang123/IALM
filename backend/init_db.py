@@ -50,9 +50,13 @@ def ensure_database():
 
 
 def create_tables():
-    """创建所有 ORM 表"""
-    Base.metadata.create_all(bind=engine)
-    print(f"✅ 表创建完成（{len(Base.metadata.tables)} 张）")
+    """
+    跳过 — 表结构由 sql/init.sql 提供（46 张表 + 种子数据 + 索引）
+    ORM 模型只用于业务代码，结构对齐 sql/init.sql
+    """
+    # Base.metadata.create_all(bind=engine)  # 不再调用，避免与 SQL DDL 字段冲突
+    # SQL 已通过 init.sql 导入完成
+    pass
 
 
 def seed_data():
