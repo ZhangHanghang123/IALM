@@ -53,10 +53,23 @@ def create_tables():
     """
     跳过 — 表结构由 sql/init.sql 提供（46 张表 + 种子数据 + 索引）
     ORM 模型只用于业务代码，结构对齐 sql/init.sql
+    如果 ORM 字段多出（如 role/last_login_ip），自动 ALTER TABLE 补充
     """
-    # Base.metadata.create_all(bind=engine)  # 不再调用，避免与 SQL DDL 字段冲突
-    # SQL 已通过 init.sql 导入完成
-    pass
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(engine)
+    if "sys_user" in inspector.get_table_names():
+        existing_cols = {c["name"] for c in inspector.get_columns("sys_user")}
+        extras = {
+            "role": "VARCHAR(32) DEFAULT 'VIEWER' COMMENT '角色简写（与 sys_role.code 对齐）'",
+            "last_login_ip": "VARCHAR(64) DEFAULT NULL",
+        }
+        with engine.begin() as conn:
+            for col, ddl in extras.items():
+                if col not in existing_cols:
+                    conn.execute(text(f"ALTER TABLE sys_user ADD COLUMN {col} {ddl}"))
+                    print(f"  ↪ sys_user 加列 {col}")
+        print("✅ ORM/SQL 字段对齐完成")
 
 
 def seed_data():
