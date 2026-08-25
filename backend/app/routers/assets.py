@@ -117,8 +117,11 @@ def list_holdings(
 
     total = db.execute(text(f"SELECT COUNT(*) FROM ialm_asset_holding h WHERE {where_sql}"), params).scalar() or 0
     rows = db.execute(
-        text(f"""SELECT h.id, h.company_id, c.company_short AS company_name, h.asset_code,
-                     h.asset_name, ac.category_code, ac.category_name,
+        text(f"""SELECT h.id, h.company_id,
+                     c.company_code, c.company_name AS company_full_name,
+                     c.company_short AS company_name,
+                     h.asset_code, h.asset_name,
+                     ac.category_code, ac.category_name,
                      h.cost_value, h.market_value, h.coupon_rate, h.ytm,
                      h.duration_year, h.maturity_date, h.credit_rating, h.currency
               FROM ialm_asset_holding h
@@ -131,13 +134,15 @@ def list_holdings(
     return {
         "total": total,
         "items": [
-            {"id": r[0], "company_id": r[1], "company_name": r[2], "asset_code": r[3],
-             "asset_name": r[4], "category_code": r[5], "category_name": r[6],
-             "cost_value": float(r[7] or 0), "market_value": float(r[8] or 0),
-             "coupon_rate": float(r[9] or 0), "ytm": float(r[10] or 0),
-             "duration_year": float(r[11] or 0),
-             "maturity_date": r[12].isoformat() if r[12] else None,
-             "credit_rating": r[13], "currency": r[14]}
+            {"id": r[0], "company_id": r[1],
+             "company_code": r[2], "company_full_name": r[3], "company_name": r[4],
+             "asset_code": r[5], "asset_name": r[6],
+             "category_code": r[7], "category_name": r[8],
+             "cost_value": float(r[9] or 0), "market_value": float(r[10] or 0),
+             "coupon_rate": float(r[11] or 0), "ytm": float(r[12] or 0),
+             "duration_year": float(r[13] or 0),
+             "maturity_date": r[14].isoformat() if r[14] else None,
+             "credit_rating": r[15], "currency": r[16]}
             for r in rows
         ],
     }

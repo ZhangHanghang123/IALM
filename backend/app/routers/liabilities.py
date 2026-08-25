@@ -94,9 +94,14 @@ def list_policies(
     where_sql = " AND ".join(where)
 
     rows = db.execute(
-        text(f"""SELECT p.id, p.policy_no, p.company_id, c.company_short AS company_name,
-                     p.product_type_id, pc.product_type_name, p.sum_insured, p.annual_premium,
-                     p.payment_period, p.insurance_period, p.effective_date, p.maturity_date
+        text(f"""SELECT p.id, p.policy_no, p.company_id,
+                     c.company_code, c.company_name AS company_full_name,
+                     c.company_short AS company_name,
+                     p.product_type_id, pc.product_type_code AS product_code,
+                     pc.product_type_name AS product_name,
+                     p.sum_insured, p.annual_premium,
+                     p.payment_period, p.insurance_period,
+                     p.effective_date, p.maturity_date
               FROM ialm_policy_master p
               LEFT JOIN ialm_insurance_company c ON c.id = p.company_id AND c.is_deleted = 0
               LEFT JOIN ialm_product_category pc ON pc.id = p.product_type_id AND pc.is_deleted = 0
@@ -108,12 +113,13 @@ def list_policies(
     return {
         "total": total,
         "items": [
-            {"id": r[0], "policy_no": r[1], "company_id": r[2], "company_name": r[3],
-             "product_type_id": r[4], "product_name": r[5],
-             "sum_insured": float(r[6] or 0), "annual_premium": float(r[7] or 0),
-             "payment_period": r[8], "insurance_period": r[9],
-             "effective_date": r[10].isoformat() if r[10] else None,
-             "maturity_date": r[11].isoformat() if r[11] else None}
+            {"id": r[0], "policy_no": r[1], "company_id": r[2],
+             "company_code": r[3], "company_full_name": r[4], "company_name": r[5],
+             "product_type_id": r[6], "product_code": r[7], "product_name": r[8],
+             "sum_insured": float(r[9] or 0), "annual_premium": float(r[10] or 0),
+             "payment_period": r[11], "insurance_period": r[12],
+             "effective_date": r[13].isoformat() if r[13] else None,
+             "maturity_date": r[14].isoformat() if r[14] else None}
             for r in rows
         ],
     }

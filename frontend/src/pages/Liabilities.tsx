@@ -1,7 +1,7 @@
 /**
  * IALM 负债端管理
  */
-import { Card, Tabs, Tag, Space } from 'antd'
+import { Card, Tabs, Tag, Space, Tooltip } from 'antd'
 import DataListPage from '../components/DataListPage'
 import { liabilitiesApi } from '../api'
 
@@ -24,12 +24,22 @@ export default function Liabilities() {
           children: (
             <DataListPage
               title="保单主档管理"
-              subtitle="保险合同主档（保额/保费/期限）"
+              subtitle="保险合同主档（关联 ialm_insurance_company / ialm_product_category）"
               fetcher={(p) => liabilitiesApi.policies(p)}
               columns={[
-                { title: '保单号', dataIndex: 'policy_no', width: 180 },
-                { title: '保险公司', dataIndex: 'company_name', width: 120 },
-                { title: '产品', dataIndex: 'product_name', width: 160 },
+                { title: '保单号', dataIndex: 'policy_no', width: 170 },
+                // === 外键关联展示 ===
+                { title: '机构编码', dataIndex: 'company_code', width: 140,
+                  render: (v: string) => <Tag color="purple">{v}</Tag> },
+                { title: '保险公司', dataIndex: 'company_name', width: 90,
+                  render: (v: string, row: any) => (
+                    <Tooltip title={`全称: ${row.company_full_name || ''} | ID=${row.company_id}`}>
+                      <span>{v}</span>
+                    </Tooltip>
+                  ) },
+                { title: '产品编码', dataIndex: 'product_code', width: 130 },
+                { title: '产品名称', dataIndex: 'product_name', width: 160 },
+                // === 业务字段 ===
                 { title: '保额(万)', dataIndex: 'sum_insured', width: 120,
                   render: (v: number) => v?.toLocaleString() },
                 { title: '年保费(万)', dataIndex: 'annual_premium', width: 120,
