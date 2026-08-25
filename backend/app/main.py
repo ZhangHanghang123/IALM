@@ -86,7 +86,7 @@ app.include_router(stress_router, prefix="/api")
 app.include_router(portfolio_router, prefix="/api")
 app.include_router(risk_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
-app.include_router(system_router, prefix="/api")
+app.include_router(system_router, prefix="/api/system")
 
 
 @app.exception_handler(Exception)

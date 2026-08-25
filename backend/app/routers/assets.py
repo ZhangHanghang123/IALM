@@ -213,7 +213,7 @@ def list_asset_cashflows(
               ORDER BY cf.holding_id, cf.period_year, cf.period_number LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
-    total = db.execute(text(f"SELECT COUNT(*) FROM ialm_asset_cashflow WHERE {where_sql}"), params).scalar() or 0
+    total = db.execute(text(f"SELECT COUNT(*) FROM ialm_asset_cashflow cf WHERE {where_sql}"), params).scalar() or 0
     return {
         "total": total,
         "items": [
