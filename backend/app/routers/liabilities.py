@@ -152,6 +152,7 @@ def create_policy(
 @router.get("/cashflows")
 def list_liability_cashflows(
     company_id: Optional[int] = None,
+    policy_id: Optional[int] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -162,10 +163,13 @@ def list_liability_cashflows(
     if company_id:
         where.append("cf.company_id = :cid")
         params["cid"] = company_id
+    if policy_id is not None:
+        where.append("cf.policy_id = :pid")
+        params["pid"] = policy_id
     where_sql = " AND ".join(where)
 
     rows = db.execute(
-        text(f"""SELECT cf.id, cf.company_id, cf.product_type_id,
+        text(f"""SELECT cf.id, cf.company_id, cf.product_type_id, cf.policy_id,
                      cf.period_number, cf.period_count, cf.period_unit,
                      pu.unit_name AS period_unit_name, pu.days_per_unit,
                      cf.period_date, cf.period_year, cf.cashflow_type,
@@ -173,20 +177,20 @@ def list_liability_cashflows(
               FROM ialm_liability_cashflow cf
               LEFT JOIN ialm_period_unit_dict pu ON pu.unit_code = cf.period_unit AND pu.is_deleted = 0
               WHERE {where_sql}
-              ORDER BY cf.company_id, cf.period_year, cf.period_number LIMIT :limit OFFSET :offset"""),
+              ORDER BY cf.policy_id, cf.period_year, cf.period_number LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     total = db.execute(text(f"SELECT COUNT(*) FROM ialm_liability_cashflow cf WHERE {where_sql}"), params).scalar() or 0
     return {
         "total": total,
         "items": [
-            {"id": r[0], "company_id": r[1], "product_type_id": r[2],
-             "period_number": r[3], "period_count": float(r[4] or 0), "period_unit": r[5],
-             "period_unit_name": r[6], "days_per_unit": float(r[7] or 1),
-             "period_date": r[8].isoformat() if r[8] else None,
-             "period_year": float(r[9] or 0), "cashflow_type": r[10],
-             "amount": float(r[11] or 0), "discount_factor": float(r[12] or 1),
-             "present_value": float(r[13] or 0), "scenario_code": r[14]}
+            {"id": r[0], "company_id": r[1], "product_type_id": r[2], "policy_id": r[3],
+             "period_number": r[4], "period_count": float(r[5] or 0), "period_unit": r[6],
+             "period_unit_name": r[7], "days_per_unit": float(r[8] or 1),
+             "period_date": r[9].isoformat() if r[9] else None,
+             "period_year": float(r[10] or 0), "cashflow_type": r[11],
+             "amount": float(r[12] or 0), "discount_factor": float(r[13] or 1),
+             "present_value": float(r[14] or 0), "scenario_code": r[15]}
             for r in rows
         ],
     }
