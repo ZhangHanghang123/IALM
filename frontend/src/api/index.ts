@@ -113,9 +113,10 @@ export const modelsApi = {
   parameters: (params?: any) => api.get('/models/parameters', { params }),
 }
 
-// ═══ 系统 ═══
+// ═══ 系统/字典 ═══
 export const systemApi = {
   health: () => api.get('/health'),
+  periodUnits: () => api.get('/system/period-units'),
 }
 
 export default api

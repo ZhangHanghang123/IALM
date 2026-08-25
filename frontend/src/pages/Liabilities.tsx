@@ -1,9 +1,10 @@
 /**
  * IALM 负债端管理
  */
-import { Card, Tabs, Tag, Space, Tooltip } from 'antd'
+import { useState, useEffect } from 'react'
+import { Card, Tabs, Tag, Space, Tooltip, Table } from 'antd'
 import DataListPage from '../components/DataListPage'
-import { liabilitiesApi } from '../api'
+import { liabilitiesApi, systemApi } from '../api'
 
 const liabilityColors: Record<string, string> = {
   LIFE: 'blue',
@@ -116,32 +117,90 @@ export default function Liabilities() {
         {
           key: 'cashflows',
           label: '负债现金流',
-          children: (
-            <DataListPage
-              title="负债现金流"
-              subtitle="按期预测的负债端现金流（保费/给付/退保）"
-              fetcher={(p) => liabilitiesApi.cashflows({ ...p, page_size: 50 })}
-              columns={[
-                { title: '年', dataIndex: 'period_year', width: 80,
-                  render: (v: number) => v?.toFixed(0) },
-                { title: '现金流类型', dataIndex: 'cashflow_type', width: 160,
-                  render: (v: string) => <Tag color={
-                    v === 'PREMIUM_IN' ? 'green' :
-                    v === 'BENEFIT_OUT' ? 'red' :
-                    v === 'CLAIM_OUT' ? 'orange' : 'default'
-                  }>{v}</Tag> },
-                { title: '金额(万)', dataIndex: 'amount', width: 140,
-                  render: (v: number) => v?.toLocaleString(undefined, {maximumFractionDigits: 2}) },
-                { title: '折现因子', dataIndex: 'discount_factor', width: 100,
-                  render: (v: number) => v?.toFixed(4) },
-                { title: '现值(万)', dataIndex: 'present_value', width: 140,
-                  render: (v: number) => v?.toLocaleString(undefined, {maximumFractionDigits: 2}) },
-                { title: '现金流日期', dataIndex: 'period_date', width: 110 },
-              ]}
-            />
-          ),
+          children: <LiabilityCashflowsTab />,
         },
       ]}
     />
+  )
+}
+
+// ═══ 负债现金流 Tab（自定义：带期限单位字典 + 多类型现金流） ═══
+function LiabilityCashflowsTab() {
+  const [items, setItems] = useState<any[]>([])
+  const [total, setTotal] = useState(0)
+  const [periodUnits, setPeriodUnits] = useState<any[]>([])
+
+  useEffect(() => {
+    const load = async () => {
+      const [r, rD] = await Promise.all([
+        liabilitiesApi.cashflows({ page: 1, page_size: 500 }),
+        systemApi.periodUnits(),
+      ])
+      setItems(r.data?.items || [])
+      setTotal(r.data?.total || 0)
+      setPeriodUnits(rD.data?.items || [])
+    }
+    load()
+  }, [])
+
+  return (
+    <div>
+      <h3>负债现金流</h3>
+      <p style={{ color: '#999' }}>按期预测的负债端现金流（保费/给付/退保）</p>
+      <Card style={{ marginTop: 16 }}>
+        <Table
+          rowKey="id"
+          dataSource={items}
+          pagination={{ pageSize: 20, total, showSizeChanger: false, showTotal: (t: number) => `共 ${t} 条` }}
+          columns={[
+            { title: '期数', dataIndex: 'period_number', width: 70 },
+            // === 期限 + 期限单位（拆成两列）===
+            { title: '期限', dataIndex: 'period_count', width: 80,
+              render: (v: number) => v?.toFixed(2) },
+            { title: '期限单位', dataIndex: 'period_unit_name', width: 90,
+              render: (v: string, row: any) => <Tag color={
+                row.period_unit === 'DAY' ? 'magenta' :
+                row.period_unit === 'WEEK' ? 'purple' :
+                row.period_unit === 'MONTH' ? 'orange' :
+                row.period_unit === 'QUARTER' ? 'cyan' :
+                row.period_unit === 'HALF_YEAR' ? 'geekblue' :
+                row.period_unit === 'YEAR' ? 'blue' : 'default'
+              }>{v || '-'}</Tag> },
+            { title: '现金流类型', dataIndex: 'cashflow_type', width: 160,
+              render: (v: string) => <Tag color={
+                v === 'PREMIUM_IN' ? 'green' :
+                v === 'BENEFIT_OUT' ? 'red' :
+                v === 'CLAIM_OUT' ? 'orange' :
+                v === 'SURRENDER' ? 'purple' : 'default'
+              }>{v}</Tag> },
+            { title: '金额(万)', dataIndex: 'amount', width: 140,
+              render: (v: number) => v?.toLocaleString(undefined, { maximumFractionDigits: 2 }) },
+            { title: '折现因子', dataIndex: 'discount_factor', width: 100,
+              render: (v: number) => v?.toFixed(4) },
+            { title: '现值(万)', dataIndex: 'present_value', width: 140,
+              render: (v: number) => v?.toLocaleString(undefined, { maximumFractionDigits: 2 }) },
+            { title: '现金流日期', dataIndex: 'period_date', width: 110 },
+          ]}
+        />
+      </Card>
+      {/* 字典说明 */}
+      <Card size="small" style={{ marginTop: 16 }} title="📚 期限单位字典">
+        <Space wrap size={16}>
+          {periodUnits.map((u: any) => (
+            <span key={u.unit_code}>
+              <Tag color={
+                u.unit_code === 'DAY' ? 'magenta' :
+                u.unit_code === 'WEEK' ? 'purple' :
+                u.unit_code === 'MONTH' ? 'orange' :
+                u.unit_code === 'QUARTER' ? 'cyan' :
+                u.unit_code === 'HALF_YEAR' ? 'geekblue' :
+                u.unit_code === 'YEAR' ? 'blue' : 'default'
+              }>{u.unit_name}</Tag>
+              <span style={{ color: '#999' }}>{u.unit_code} ({u.days_per_unit} 天/单位)</span>
+            </span>
+          ))}
+        </Space>
+      </Card>
+    </div>
   )
 }

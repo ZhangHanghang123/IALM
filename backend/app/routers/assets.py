@@ -202,10 +202,15 @@ def list_asset_cashflows(
     where_sql = " AND ".join(where)
 
     rows = db.execute(
-        text(f"""SELECT id, holding_id, company_id, asset_code, period_number, period_date,
-                     period_year, cashflow_type, amount, discount_factor, present_value, scenario_code
-              FROM ialm_asset_cashflow WHERE {where_sql}
-              ORDER BY holding_id, period_year, period_number LIMIT :limit OFFSET :offset"""),
+        text(f"""SELECT cf.id, cf.holding_id, cf.company_id, cf.asset_code,
+                     cf.period_number, cf.period_count, cf.period_unit,
+                     pu.unit_name AS period_unit_name, pu.days_per_unit,
+                     cf.period_date, cf.period_year, cf.cashflow_type,
+                     cf.amount, cf.discount_factor, cf.present_value, cf.scenario_code
+              FROM ialm_asset_cashflow cf
+              LEFT JOIN ialm_period_unit_dict pu ON pu.unit_code = cf.period_unit AND pu.is_deleted = 0
+              WHERE {where_sql}
+              ORDER BY cf.holding_id, cf.period_year, cf.period_number LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     total = db.execute(text(f"SELECT COUNT(*) FROM ialm_asset_cashflow WHERE {where_sql}"), params).scalar() or 0
@@ -213,10 +218,12 @@ def list_asset_cashflows(
         "total": total,
         "items": [
             {"id": r[0], "holding_id": r[1], "company_id": r[2], "asset_code": r[3],
-             "period_number": r[4], "period_date": r[5].isoformat() if r[5] else None,
-             "period_year": float(r[6] or 0), "cashflow_type": r[7],
-             "amount": float(r[8] or 0), "discount_factor": float(r[9] or 1),
-             "present_value": float(r[10] or 0), "scenario_code": r[11]}
+             "period_number": r[4], "period_count": float(r[5] or 0), "period_unit": r[6],
+             "period_unit_name": r[7], "days_per_unit": float(r[8] or 1),
+             "period_date": r[9].isoformat() if r[9] else None,
+             "period_year": float(r[10] or 0), "cashflow_type": r[11],
+             "amount": float(r[12] or 0), "discount_factor": float(r[13] or 1),
+             "present_value": float(r[14] or 0), "scenario_code": r[15]}
             for r in rows
         ],
     }

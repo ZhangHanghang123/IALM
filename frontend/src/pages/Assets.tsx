@@ -7,22 +7,27 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Card, Tabs, Tag, Space, Tooltip, Button, Select, Table, Input, Empty, Statistic as AntStatistic } from 'antd'
 import { FundViewOutlined, ClearOutlined, ReloadOutlined } from '@ant-design/icons'
-import { assetsApi } from '../api'
+import { assetsApi, systemApi } from '../api'
 
 export default function Assets() {
   const [activeTab, setActiveTab] = useState('holdings')
   const [holdings, setHoldings] = useState<any[]>([])
+  const [periodUnits, setPeriodUnits] = useState<any[]>([])
   // === 联动状态 ===
   const [selectedHoldingId, setSelectedHoldingId] = useState<number | null>(null)
   const [cashflows, setCashflows] = useState<any[]>([])
   const [cfTotal, setCfTotal] = useState(0)
   const [cfLoading, setCfLoading] = useState(false)
 
-  // 加载全部持仓（用于下拉选择）
+  // 加载全部持仓 + 期限单位字典
   useEffect(() => {
     const load = async () => {
-      const r = await assetsApi.holdings({ page: 1, page_size: 200 })
-      setHoldings(r.data?.items || [])
+      const [rH, rD] = await Promise.all([
+        assetsApi.holdings({ page: 1, page_size: 200 }),
+        systemApi.periodUnits(),
+      ])
+      setHoldings(rH.data?.items || [])
+      setPeriodUnits(rD.data?.items || [])
     }
     load()
   }, [])
@@ -93,6 +98,7 @@ export default function Assets() {
           children: (
             <CashflowsTab
               holdings={holdings}
+              periodUnits={periodUnits}
               selectedHoldingId={selectedHoldingId}
               setSelectedHoldingId={setSelectedHoldingId}
               selectedHolding={selectedHolding}
@@ -181,9 +187,18 @@ function HoldingsTab({ holdings, viewCashflows }: any) {
 
 // ═══ 资产现金流 Tab（联动核心：持仓筛选 + 持仓信息卡 + 现金流表） ═══
 function CashflowsTab({
-  holdings, selectedHoldingId, setSelectedHoldingId,
+  holdings, periodUnits, selectedHoldingId, setSelectedHoldingId,
   selectedHolding, cashflows, cfTotal, cfLoading, cfStats, reload,
 }: any) {
+  // === 期限单位筛选状态 ===
+  const [unitFilter, setUnitFilter] = useState<string | null>(null)
+
+  // 根据 unit 过滤
+  const filteredCashflows = useMemo(() => {
+    if (!unitFilter) return cashflows
+    return cashflows.filter((cf) => cf.period_unit === unitFilter)
+  }, [cashflows, unitFilter])
+
   return (
     <div>
       <h3 style={{ marginBottom: 0 }}>
@@ -221,6 +236,18 @@ function CashflowsTab({
             </Button>
           )}
           <Button icon={<ReloadOutlined />} onClick={reload}>刷新</Button>
+          <span style={{ marginLeft: 16 }}>期限单位：</span>
+          <Select
+            allowClear
+            placeholder="全部单位"
+            style={{ width: 120 }}
+            value={unitFilter || undefined}
+            onChange={(v) => setUnitFilter(v ?? null)}
+            options={periodUnits.map((u: any) => ({
+              value: u.unit_code,
+              label: u.unit_name,
+            }))}
+          />
         </Space>
       </Card>
 
@@ -280,21 +307,34 @@ function CashflowsTab({
       <Card style={{ marginTop: 16 }} title="现金流明细">
         <Table
           rowKey="id"
-          dataSource={cashflows}
+          dataSource={filteredCashflows}
           loading={cfLoading}
           pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
           locale={{ emptyText: <Empty description={selectedHoldingId ? '该持仓暂无现金流' : '请先选择持仓'} /> }}
           columns={[
             { title: '持仓编号', dataIndex: 'asset_code', width: 110 },
             { title: '期数', dataIndex: 'period_number', width: 70 },
-            { title: '年', dataIndex: 'period_year', width: 80,
-              render: (v: number) => v?.toFixed(0) },
+            // === 期限 + 期限单位（拆成两列）===
+            { title: '期限', dataIndex: 'period_count', width: 80,
+              render: (v: number) => v?.toFixed(2) },
+            { title: '期限单位', dataIndex: 'period_unit_name', width: 90,
+              render: (v: string, row: any) => <Tag color={
+                row.period_unit === 'DAY' ? 'magenta' :
+                row.period_unit === 'WEEK' ? 'purple' :
+                row.period_unit === 'MONTH' ? 'orange' :
+                row.period_unit === 'QUARTER' ? 'cyan' :
+                row.period_unit === 'HALF_YEAR' ? 'geekblue' :
+                row.period_unit === 'YEAR' ? 'blue' : 'default'
+              }>{v || '-'}</Tag> },
             { title: '现金流类型', dataIndex: 'cashflow_type', width: 130,
               render: (v: string) => <Tag color={
                 v === 'COUPON' ? 'blue' :
                 v === 'PRINCIPAL' ? 'orange' :
+                v === 'INTEREST' ? 'cyan' :
+                v === 'DIVIDEND' ? 'gold' :
+                v === 'SETTLE' ? 'volcano' :
                 v === 'BENEFIT_OUT' ? 'red' :
-                v === 'CLAIM_OUT' ? 'volcano' : 'default'
+                v === 'CLAIM_OUT' ? 'magenta' : 'default'
               }>{v}</Tag> },
             { title: '金额(万)', dataIndex: 'amount', width: 140,
               render: (v: number) => v?.toLocaleString(undefined, { maximumFractionDigits: 2 }) },

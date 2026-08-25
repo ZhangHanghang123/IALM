@@ -19,6 +19,7 @@ from app.routers.stress import router as stress_router
 from app.routers.portfolio import router as portfolio_router
 from app.routers.risk import router as risk_router
 from app.routers.models import router as models_router
+from app.routers.system import router as system_router
 
 # 导入模型以注册到 Base.metadata
 from app.models import SysUser, IalmInsuranceCompany, IalmMatchAnalysis  # noqa: F401
@@ -85,6 +86,7 @@ app.include_router(stress_router, prefix="/api")
 app.include_router(portfolio_router, prefix="/api")
 app.include_router(risk_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
+app.include_router(system_router, prefix="/api")
 
 
 @app.exception_handler(Exception)
