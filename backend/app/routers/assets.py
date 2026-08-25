@@ -185,6 +185,7 @@ def delete_holding(
 @router.get("/cashflows")
 def list_asset_cashflows(
     company_id: Optional[int] = None,
+    holding_id: Optional[int] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -195,13 +196,16 @@ def list_asset_cashflows(
     if company_id:
         where.append("company_id = :cid")
         params["cid"] = company_id
+    if holding_id is not None:
+        where.append("holding_id = :hid")
+        params["hid"] = holding_id
     where_sql = " AND ".join(where)
 
     rows = db.execute(
         text(f"""SELECT id, holding_id, company_id, asset_code, period_number, period_date,
                      period_year, cashflow_type, amount, discount_factor, present_value, scenario_code
               FROM ialm_asset_cashflow WHERE {where_sql}
-              ORDER BY period_year, period_number LIMIT :limit OFFSET :offset"""),
+              ORDER BY holding_id, period_year, period_number LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     total = db.execute(text(f"SELECT COUNT(*) FROM ialm_asset_cashflow WHERE {where_sql}"), params).scalar() or 0
