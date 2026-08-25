@@ -2,7 +2,7 @@
  * IALM 5号规则 - 期限匹配率独立分析
  */
 import { useState } from 'react'
-import { Card, Form, InputNumber, Select, Button, Row, Col, Statistic, Alert, Typography, Tag, message, Table } from 'antd'
+import { Card, Form, InputNumber, Select, Button, Row, Col, Statistic, Alert, Typography, Tag, message, Table, Space } from 'antd'
 import { PlayCircleOutlined } from '@ant-design/icons'
 import { algorithmsApi } from '../api'
 
