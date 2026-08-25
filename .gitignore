@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Node.js
+node_modules/
+frontend/dist/
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Workspace
+.workbuddy/
+
+# Logs
+logs/
+*.log
+下载日志.txt
+下载失败记录.txt
+
+# Build / Deploy artifacts
+dist/
+*.tar.gz
+
+# Large data files
+data/
+backend/data/
+tmp/
+
+# TypeScript incremental build info
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo

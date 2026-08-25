@@ -1,0 +1,19 @@
+[Unit]
+Description=IALM Insurance Asset-Liability Management Backend
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=almd
+Group=almd
+WorkingDirectory=/opt/ialm/backend
+Environment="PATH=/opt/ialm/backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/opt/ialm/backend/.env
+ExecStart=/opt/ialm/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8004 --workers 1
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
