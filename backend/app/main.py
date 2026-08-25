@@ -12,6 +12,13 @@ from app.config import settings
 from app.database import engine, Base
 from app.routers import auth_router, companies_router
 from app.routers.algorithms import router as algorithms_router
+from app.routers.assets import router as assets_router
+from app.routers.liabilities import router as liabilities_router
+from app.routers.market_data import router as market_data_router
+from app.routers.stress import router as stress_router
+from app.routers.portfolio import router as portfolio_router
+from app.routers.risk import router as risk_router
+from app.routers.models import router as models_router
 
 # 导入模型以注册到 Base.metadata
 from app.models import SysUser, IalmInsuranceCompany, IalmMatchAnalysis  # noqa: F401
@@ -71,6 +78,13 @@ def version():
 app.include_router(auth_router, prefix="/api")
 app.include_router(companies_router, prefix="/api")
 app.include_router(algorithms_router, prefix="/api")
+app.include_router(assets_router, prefix="/api")
+app.include_router(liabilities_router, prefix="/api")
+app.include_router(market_data_router, prefix="/api")
+app.include_router(stress_router, prefix="/api")
+app.include_router(portfolio_router, prefix="/api")
+app.include_router(risk_router, prefix="/api")
+app.include_router(models_router, prefix="/api")
 
 
 @app.exception_handler(Exception)
