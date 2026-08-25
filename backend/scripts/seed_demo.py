@@ -63,24 +63,26 @@ def main():
 
     # 2. 资产分类
     categories = [
-        ("CASH", "现金及银行存款", 0, 1, "LOW"),
-        ("DEPOSIT", "存放同业", 0, 1, "LOW"),
-        ("GOV-BOND", "政府债券", 0, 1, "LOW"),
-        ("FIN-BOND", "金融债券", 0, 1, "LOW"),
-        ("CORP-BOND", "企业债券", 0, 1, "MEDIUM"),
-        ("STOCK", "股票", 0, 1, "HIGH"),
-        ("FUND", "基金", 0, 1, "MEDIUM"),
-        ("ALT-INVEST", "另类投资", 0, 1, "HIGH"),
+        ("CASH", "现金及银行存款", 0, 1, "CASH", 0.0, 0.0),
+        ("DEPOSIT", "存放同业", 0, 1, "CASH", 0.2, 0.5),
+        ("GOV-BOND", "政府债券", 0, 1, "BOND", 0.0, 7.0),
+        ("FIN-BOND", "金融债券", 0, 1, "BOND", 0.1, 5.5),
+        ("CORP-BOND", "企业债券", 0, 1, "BOND", 0.2, 4.5),
+        ("STOCK", "股票", 0, 1, "EQUITY", 0.3, 3.0),
+        ("FUND", "基金", 0, 1, "FUND", 0.25, 4.0),
+        ("ALT-INVEST", "另类投资", 0, 1, "ALTERNATIVE", 0.4, 5.0),
     ]
-    for code, name, parent_id, level, risk in categories:
+    for code, name, parent_id, level, ctype, risk_w, dur in categories:
         cur.execute("SELECT id FROM ialm_asset_category WHERE category_code = %s", (code,))
         if not cur.fetchone():
             cur.execute(
                 """INSERT INTO ialm_asset_category
-                (category_code, category_name, parent_code, risk_level,
+                (category_code, category_name, parent_id, category_level,
+                 category_type, risk_weight, duration_default,
                  status, is_deleted, created_by, updated_by, created_at, updated_at)
-                VALUES (%s, %s, '', %s, 1, 0, 'system', 'system', NOW(), NOW())""",
-                (code, name, risk),
+                VALUES (%s, %s, %s, %s, %s, %s, %s,
+                        1, 0, 'system', 'system', NOW(), NOW())""",
+                (code, name, parent_id, level, ctype, risk_w, dur),
             )
     print(f"✅ 资产分类 {len(categories)} 条")
 
@@ -131,7 +133,7 @@ def main():
     if cur.fetchone()[0] < 10:
         count = 0
         for cid in companies:
-            for cat_code, cat_name, _, _, risk in categories[:5]:
+            for cat_code, cat_name, _, _, _, _, dur in categories[:5]:
                 cur.execute("SELECT id FROM ialm_asset_holding WHERE company_id=%s AND category_code=%s AND is_deleted=0",
                             (cid, cat_code))
                 if cur.fetchone():
