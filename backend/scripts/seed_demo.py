@@ -214,11 +214,13 @@ def main():
                 continue
             cur.execute(
                 """INSERT INTO ialm_risk_preference
-                (company_id, preference_level, max_drawdown, max_var, max_duration_gap,
-                 target_solvency_ratio, target_lcr, effective_date, approved_by,
-                 status, is_deleted, created_by, updated_by, created_at, updated_at)
-                VALUES (%s, 'MODERATE', 0.10, 0.05, 1.0, 1.20, 1.05,
-                        CURDATE(), 'admin', 1, 0, 'system', 'system', NOW(), NOW())""",
+                (company_id, preference_name, effective_date,
+                 duration_gap_min, duration_gap_max, duration_match_min,
+                 cashflow_payback_max, cost_yield_ratio_min,
+                 is_deleted, created_at, updated_at)
+                VALUES (%s, '稳健型', CURDATE(),
+                        -1.0, 1.0, 0.80, 5.0, 1.05,
+                        0, NOW(), NOW())""",
                 (cid,),
             )
             count += 1
