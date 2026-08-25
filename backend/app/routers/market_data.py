@@ -47,6 +47,7 @@ def get_curve_points(curve_id: int, db: Session = Depends(get_db), _: dict = Dep
     ).fetchall()
     return {
         "curve_id": curve_id,
+        "total": len(rows),
         "points": [
             {"id": r[0], "curve_id": r[1],
              "curve_date": r[2].isoformat() if r[2] else None,
@@ -65,18 +66,23 @@ def list_fx_rates(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
+    """汇率数据"""
     rows = db.execute(
-        text("""SELECT id, currency_pair, rate, rate_type, effective_date, source
-              FROM ialm_fx_rate WHERE is_deleted = 0
-              ORDER BY effective_date DESC LIMIT :limit OFFSET :offset"""),
+        text("""SELECT id, currency_pair, rate_date, bid_rate, ask_rate, mid_rate, data_source
+              FROM ialm_fx_rate
+              ORDER BY rate_date DESC, currency_pair LIMIT :limit OFFSET :offset"""),
         {"limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
-    total = db.execute(text("SELECT COUNT(*) FROM ialm_fx_rate WHERE is_deleted = 0")).scalar() or 0
+    total = db.execute(text("SELECT COUNT(*) FROM ialm_fx_rate")).scalar() or 0
     return {
         "total": total,
         "items": [
-            {"id": r[0], "currency_pair": r[1], "rate": float(r[2] or 0),
-             "rate_type": r[3], "effective_date": r[4].isoformat() if r[4] else None, "source": r[5]}
+            {"id": r[0], "currency_pair": r[1],
+             "rate_date": r[2].isoformat() if r[2] else None,
+             "bid_rate": float(r[3] or 0),
+             "ask_rate": float(r[4] or 0),
+             "mid_rate": float(r[5] or 0),
+             "data_source": r[6]}
             for r in rows
         ],
     }
@@ -90,19 +96,27 @@ def list_equity_indices(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
+    """股票指数数据"""
     rows = db.execute(
-        text("""SELECT id, index_code, index_name, exchange, level, change_pct, trade_date
-              FROM ialm_equity_index WHERE is_deleted = 0
-              ORDER BY trade_date DESC LIMIT :limit OFFSET :offset"""),
+        text("""SELECT id, index_code, index_name, trade_date, open_price, high_price,
+                     low_price, close_price, volume, amount, change_rate
+              FROM ialm_equity_index
+              ORDER BY trade_date DESC, index_code LIMIT :limit OFFSET :offset"""),
         {"limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
-    total = db.execute(text("SELECT COUNT(*) FROM ialm_equity_index WHERE is_deleted = 0")).scalar() or 0
+    total = db.execute(text("SELECT COUNT(*) FROM ialm_equity_index")).scalar() or 0
     return {
         "total": total,
         "items": [
-            {"id": r[0], "index_code": r[1], "index_name": r[2], "exchange": r[3],
-             "level": float(r[4] or 0), "change_pct": float(r[5] or 0),
-             "trade_date": r[6].isoformat() if r[6] else None}
+            {"id": r[0], "index_code": r[1], "index_name": r[2],
+             "trade_date": r[3].isoformat() if r[3] else None,
+             "open_price": float(r[4] or 0),
+             "high_price": float(r[5] or 0),
+             "low_price": float(r[6] or 0),
+             "close_price": float(r[7] or 0),
+             "volume": int(r[8] or 0),
+             "amount": float(r[9] or 0),
+             "change_rate": float(r[10] or 0)}
             for r in rows
         ],
     }
@@ -116,18 +130,21 @@ def list_credit_spreads(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
+    """信用利差数据"""
     rows = db.execute(
-        text("""SELECT id, rating, sector, tenor_years, spread_bps, effective_date
-              FROM ialm_credit_spread WHERE is_deleted = 0
-              ORDER BY effective_date DESC LIMIT :limit OFFSET :offset"""),
+        text("""SELECT id, rating, tenor, spread_date, spread_bps, data_source
+              FROM ialm_credit_spread
+              ORDER BY spread_date DESC, rating, tenor LIMIT :limit OFFSET :offset"""),
         {"limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
-    total = db.execute(text("SELECT COUNT(*) FROM ialm_credit_spread WHERE is_deleted = 0")).scalar() or 0
+    total = db.execute(text("SELECT COUNT(*) FROM ialm_credit_spread")).scalar() or 0
     return {
         "total": total,
         "items": [
-            {"id": r[0], "rating": r[1], "sector": r[2], "tenor_years": float(r[3] or 0),
-             "spread_bps": float(r[4] or 0), "effective_date": r[5].isoformat() if r[5] else None}
+            {"id": r[0], "rating": r[1], "tenor_years": float(r[2] or 0),
+             "spread_date": r[3].isoformat() if r[3] else None,
+             "spread_bps": float(r[4] or 0),
+             "data_source": r[5]}
             for r in rows
         ],
     }
