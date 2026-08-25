@@ -36,11 +36,19 @@ export default function MarketData() {
     title: { text: curves.find(c => c.id === selectedCurveId)?.curve_name || '收益率曲线', left: 'center' },
     tooltip: { trigger: 'axis' },
     grid: { left: 50, right: 30, top: 50, bottom: 60 },
-    xAxis: { type: 'category', data: points.map(p => p.tenor_label), name: '期限' },
-    yAxis: { type: 'value', name: '收益率(%)', axisLabel: { formatter: '{value}%' } },
+    xAxis: {
+      type: 'category',
+      data: points.map(p => `${p.tenor_years}Y`),
+      name: '期限',
+    },
+    yAxis: {
+      type: 'value',
+      name: '收益率(%)',
+      axisLabel: { formatter: (v: number) => `${(v * 100).toFixed(2)}%` },
+    },
     series: [{
       type: 'line',
-      data: points.map(p => (p.rate * 100).toFixed(2)),
+      data: points.map(p => (p.rate * 100).toFixed(4)),
       itemStyle: { color: '#667eea' },
       smooth: true,
       areaStyle: { color: 'rgba(102, 126, 234, 0.1)' },
@@ -86,12 +94,11 @@ export default function MarketData() {
                   pagination={false}
                   size="small"
                   columns={[
-                    { title: '期限', dataIndex: 'tenor_label', width: 120 },
-                    { title: '年限', dataIndex: 'tenor_years', width: 100 },
+                    { title: '年期', dataIndex: 'tenor_years', width: 100,
+                      render: (v: number) => `${v}Y` },
                     { title: '收益率', dataIndex: 'rate', width: 140,
                       render: (v: number) => `${(v * 100).toFixed(3)}%` },
-                    { title: '零息', dataIndex: 'is_zero', width: 80,
-                      render: (v: number) => v ? <Tag color="blue">是</Tag> : '-' },
+                    { title: '日期', dataIndex: 'curve_date', width: 140 },
                   ]}
                 />
               </Card>
@@ -108,11 +115,14 @@ export default function MarketData() {
               fetcher={(p) => marketDataApi.fxRates(p)}
               columns={[
                 { title: '币种对', dataIndex: 'currency_pair', width: 140 },
-                { title: '汇率', dataIndex: 'rate', width: 140,
+                { title: '买入价', dataIndex: 'bid_rate', width: 110,
                   render: (v: number) => v?.toFixed(4) },
-                { title: '类型', dataIndex: 'rate_type', width: 120 },
-                { title: '生效日', dataIndex: 'effective_date', width: 140 },
-                { title: '来源', dataIndex: 'source', width: 160 },
+                { title: '卖出价', dataIndex: 'ask_rate', width: 110,
+                  render: (v: number) => v?.toFixed(4) },
+                { title: '中间价', dataIndex: 'mid_rate', width: 110,
+                  render: (v: number) => v?.toFixed(4) },
+                { title: '日期', dataIndex: 'rate_date', width: 130 },
+                { title: '来源', dataIndex: 'data_source', width: 100 },
               ]}
             />
           ),
@@ -123,21 +133,26 @@ export default function MarketData() {
           children: (
             <DataListPage
               title="股票指数"
-              subtitle="沪深300/中证500/恒生指数等"
+              subtitle="沪深 300/中证 500/恒生指数等"
               fetcher={(p) => marketDataApi.equityIndices(p)}
               columns={[
-                { title: '代码', dataIndex: 'index_code', width: 120 },
-                { title: '名称', dataIndex: 'index_name' },
-                { title: '交易所', dataIndex: 'exchange', width: 120 },
-                { title: '点位', dataIndex: 'level', width: 140,
+                { title: '代码', dataIndex: 'index_code', width: 110 },
+                { title: '名称', dataIndex: 'index_name', width: 200 },
+                { title: '日期', dataIndex: 'trade_date', width: 110 },
+                { title: '开', dataIndex: 'open_price', width: 100,
                   render: (v: number) => v?.toFixed(2) },
-                { title: '涨跌幅', dataIndex: 'change_pct', width: 120,
+                { title: '高', dataIndex: 'high_price', width: 100,
+                  render: (v: number) => v?.toFixed(2) },
+                { title: '低', dataIndex: 'low_price', width: 100,
+                  render: (v: number) => v?.toFixed(2) },
+                { title: '收', dataIndex: 'close_price', width: 100,
+                  render: (v: number) => v?.toFixed(2) },
+                { title: '涨跌幅', dataIndex: 'change_rate', width: 100,
                   render: (v: number) => (
                     <span style={{ color: v > 0 ? '#ff4d4f' : v < 0 ? '#52c41a' : '#999' }}>
                       {v > 0 ? '+' : ''}{v?.toFixed(2)}%
                     </span>
                   ) },
-                { title: '交易日', dataIndex: 'trade_date', width: 120 },
               ]}
             />
           ),
@@ -151,13 +166,14 @@ export default function MarketData() {
               subtitle="各评级/期限的信用利差（bps）"
               fetcher={(p) => marketDataApi.creditSpreads(p)}
               columns={[
-                { title: '评级', dataIndex: 'rating', width: 120,
+                { title: '评级', dataIndex: 'rating', width: 100,
                   render: (v: string) => <Tag color="blue">{v}</Tag> },
-                { title: '行业', dataIndex: 'sector', width: 140 },
-                { title: '期限(年)', dataIndex: 'tenor_years', width: 100 },
-                { title: '利差(bps)', dataIndex: 'spread_bps', width: 140,
+                { title: '期限(年)', dataIndex: 'tenor_years', width: 100,
+                  render: (v: number) => `${v}Y` },
+                { title: '利差(bps)', dataIndex: 'spread_bps', width: 130,
                   render: (v: number) => v?.toFixed(1) },
-                { title: '生效日', dataIndex: 'effective_date', width: 140 },
+                { title: '日期', dataIndex: 'spread_date', width: 140 },
+                { title: '来源', dataIndex: 'data_source', width: 100 },
               ]}
             />
           ),
