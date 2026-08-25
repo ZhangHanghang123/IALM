@@ -172,27 +172,34 @@ def main():
     cur.execute("SELECT COUNT(*) FROM ialm_policy_master WHERE is_deleted = 0")
     if cur.fetchone()[0] < 5:
         count = 0
-        product_codes = [p[0] for p in products]
+        # 先取所有 product_type_id
+        cur.execute("SELECT id, product_type_code FROM ialm_product_category WHERE is_deleted = 0")
+        product_map = {row[1]: row[0] for row in cur.fetchall()}
+        product_codes = list(product_map.keys())
         for cid in companies:
             for i in range(3):
                 cur.execute("SELECT id FROM ialm_policy_master WHERE company_id=%s AND is_deleted=0 LIMIT 1", (cid,))
                 if cur.fetchone():
                     continue
+                pcode = random.choice(product_codes)
+                pid = product_map.get(pcode, 0)
                 policy_no = f"P{cid}{i:04d}{random.randint(1000, 9999)}"
+                sum_insured = round(random.uniform(100, 5000), 4)
+                annual_premium = round(random.uniform(1, 50), 4)
                 cur.execute(
                     """INSERT INTO ialm_policy_master
-                    (policy_no, company_id, product_code, insured_amount, premium,
-                     policy_term, inception_date, maturity_date, status,
-                     is_deleted, created_by, updated_by, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s,
+                    (policy_no, company_id, product_type_id, product_name, sum_insured, annual_premium,
+                     payment_freq, payment_period, insurance_period, issue_date, effective_date, maturity_date,
+                     is_deleted, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, 1, %s, %s,
                             DATE_SUB(CURDATE(), INTERVAL %s DAY),
-                            DATE_ADD(CURDATE(), INTERVAL %s DAY), 'ACTIVE',
-                            1, 0, 'system', 'system', NOW(), NOW())""",
-                    (policy_no, cid, random.choice(product_codes),
-                     random.randint(100, 5000) * 10000,  # 保额（万）
-                     round(random.uniform(1, 50), 2) * 10000,  # 保费
-                     random.choice([10, 20, 30, 50]),
-                     random.randint(0, 1825), random.randint(365, 3650)),
+                            DATE_SUB(CURDATE(), INTERVAL %s DAY),
+                            DATE_ADD(CURDATE(), INTERVAL %s DAY),
+                            0, NOW(), NOW())""",
+                    (policy_no, cid, pid, pcode, sum_insured, annual_premium,
+                     random.choice([10, 20, 30]), random.choice([10, 20, 30, 50]),
+                     random.randint(0, 1825), random.randint(0, 1825),
+                     random.randint(365, 3650)),
                 )
                 count += 1
         print(f"✅ 保单 {count} 条")
