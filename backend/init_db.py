@@ -86,6 +86,7 @@ def seed_data():
                 password_hash=hash_password("admin123"),
                 real_name="系统管理员",
                 email="admin@ialm.com",
+                phone="",
                 role="ADMIN",
                 status=1,
                 created_by="system",
