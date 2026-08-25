@@ -11,7 +11,8 @@ env/
 
 # Node.js
 node_modules/
-frontend/dist/
+# 优化5: dist 入 git（前端构建产物直接上传到服务器，省 12s 本地构建）
+# !frontend/dist/
 
 # Environment
 .env
