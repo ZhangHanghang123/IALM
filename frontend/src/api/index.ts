@@ -125,4 +125,11 @@ export const systemApi = {
   periodUnits: () => api.get('/system/period-units'),
 }
 
+// ═══ 现金流引擎 ═══
+export const cashflowEngineApi = {
+  status: (params: any) => api.get('/cashflows/engine/status', { params }),
+  curves: () => api.get('/cashflows/engine/curves'),
+  regenerate: (data: any) => api.post('/cashflows/engine/regenerate', data),
+}
+
 export default api

@@ -5,14 +5,16 @@
  * - 现金流 tab 顶部增"按保单筛选"选择器 + 当前保单信息 + 统计卡片
  */
 import { useState, useEffect, useMemo } from 'react'
-import { Card, Tabs, Tag, Space, Tooltip, Button, Select, Table, Empty, Statistic as AntStatistic } from 'antd'
-import { FundViewOutlined, ClearOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Card, Tabs, Tag, Space, Tooltip, Button, Select, Table, Empty, Statistic as AntStatistic, Typography } from 'antd'
+import { FundViewOutlined, ClearOutlined, ReloadOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { liabilitiesApi, systemApi } from '../api'
+import EngineRegenerateModal from '../components/EngineRegenerateModal'
 
 export default function Liabilities() {
   const [activeTab, setActiveTab] = useState('policies')
   const [policies, setPolicies] = useState<any[]>([])
   const [periodUnits, setPeriodUnits] = useState<any[]>([])
+  const [engineOpen, setEngineOpen] = useState(false)
   // === 联动状态 ===
   const [selectedPolicyId, setSelectedPolicyId] = useState<number | null>(null)
   const [cashflows, setCashflows] = useState<any[]>([])
@@ -83,6 +85,7 @@ export default function Liabilities() {
   }, [cashflows])
 
   return (
+    <>
     <Tabs
       activeKey={activeTab}
       onChange={setActiveTab}
@@ -110,6 +113,7 @@ export default function Liabilities() {
               cfLoading={cfLoading}
               cfStats={cfStats}
               reload={() => loadCashflows(selectedPolicyId)}
+              onEngine={() => setEngineOpen(true)}
             />
           ),
         },
@@ -130,6 +134,15 @@ export default function Liabilities() {
         },
       ]}
     />
+
+    <EngineRegenerateModal
+      open={engineOpen}
+      companyId={4}
+      companyShort="新华保险"
+      onClose={() => setEngineOpen(false)}
+      onCompleted={() => loadCashflows(selectedPolicyId)}
+    />
+    </>
   )
 }
 
@@ -206,7 +219,7 @@ function PoliciesTab({ policies }: any) {
 // ═══ 负债现金流 Tab（联动核心：保单筛选 + 信息卡 + 统计 + 现金流） ═══
 function LiabilityCashflowsTab({
   policies, periodUnits, selectedPolicyId, setSelectedPolicyId,
-  selectedPolicy, cashflows, cfTotal, cfLoading, cfStats, reload,
+  selectedPolicy, cashflows, cfTotal, cfLoading, cfStats, reload, onEngine,
 }: any) {
   // === 期限单位筛选 ===
   const [unitFilter, setUnitFilter] = useState<string | null>(null)
@@ -217,17 +230,24 @@ function LiabilityCashflowsTab({
 
   return (
     <div>
-      <h3 style={{ marginBottom: 0 }}>
-        负债现金流
-        {selectedPolicy && (
-          <Tag color="processing" style={{ marginLeft: 8, fontSize: 14, padding: '4px 12px' }}>
-            {selectedPolicy.policy_no} · {selectedPolicy.product_name}
-          </Tag>
-        )}
-      </h3>
-      <p style={{ color: '#999', marginTop: 4 }}>
-        按期预测的负债端现金流（保费/给付/退保） · 与保单的 <code>policy_id</code> 关联
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h3 style={{ marginBottom: 0 }}>
+            负债现金流
+            {selectedPolicy && (
+              <Tag color="processing" style={{ marginLeft: 8, fontSize: 14, padding: '4px 12px' }}>
+                {selectedPolicy.policy_no} · {selectedPolicy.product_name}
+              </Tag>
+            )}
+          </h3>
+          <p style={{ color: '#999', marginTop: 4, marginBottom: 0 }}>
+            按期预测的负债端现金流（保费/给付/退保） · 与保单的 <code>policy_id</code> 关联
+          </p>
+        </div>
+        <Button type="primary" icon={<ExperimentOutlined />} onClick={onEngine}>
+          引擎重算
+        </Button>
+      </div>
 
       {/* === 筛选区 === */}
       <Card style={{ marginTop: 16 }}>

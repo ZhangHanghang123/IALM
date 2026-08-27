@@ -5,9 +5,12 @@
  * - 现金流 tab 顶部增"按持仓筛选"选择器 + 资产信息面板
  */
 import { useState, useEffect, useMemo } from 'react'
-import { Card, Tabs, Tag, Space, Tooltip, Button, Select, Table, Input, Empty, Statistic as AntStatistic } from 'antd'
-import { FundViewOutlined, ClearOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Card, Tabs, Tag, Space, Tooltip, Button, Select, Table, Input, Empty, Statistic as AntStatistic, Typography } from 'antd'
+import { FundViewOutlined, ClearOutlined, ReloadOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { assetsApi, systemApi } from '../api'
+import EngineRegenerateModal from '../components/EngineRegenerateModal'
+
+const { Title, Text } = Typography
 
 export default function Assets() {
   const [activeTab, setActiveTab] = useState('holdings')
@@ -18,6 +21,8 @@ export default function Assets() {
   const [cashflows, setCashflows] = useState<any[]>([])
   const [cfTotal, setCfTotal] = useState(0)
   const [cfLoading, setCfLoading] = useState(false)
+  // === 引擎重算 Modal ===
+  const [engineOpen, setEngineOpen] = useState(false)
 
   // 加载全部持仓 + 期限单位字典
   useEffect(() => {
@@ -78,6 +83,7 @@ export default function Assets() {
   }, [cashflows])
 
   return (
+    <>
     <Tabs
       activeKey={activeTab}
       onChange={setActiveTab}
@@ -107,6 +113,7 @@ export default function Assets() {
               cfLoading={cfLoading}
               cfStats={cfStats}
               reload={() => loadCashflows(selectedHoldingId)}
+              onEngine={() => setEngineOpen(true)}
             />
           ),
         },
@@ -117,6 +124,15 @@ export default function Assets() {
         },
       ]}
     />
+
+    <EngineRegenerateModal
+      open={engineOpen}
+      companyId={4}
+      companyShort="新华保险"
+      onClose={() => setEngineOpen(false)}
+      onCompleted={() => loadCashflows(selectedHoldingId)}
+    />
+    </>
   )
 }
 
@@ -216,7 +232,7 @@ function HoldingsTab({ holdings, viewCashflows }: any) {
 // ═══ 资产现金流 Tab（联动核心：持仓筛选 + 持仓信息卡 + 现金流表） ═══
 function CashflowsTab({
   holdings, periodUnits, selectedHoldingId, setSelectedHoldingId,
-  selectedHolding, cashflows, cfTotal, cfLoading, cfStats, reload,
+  selectedHolding, cashflows, cfTotal, cfLoading, cfStats, reload, onEngine,
 }: any) {
   // === 期限单位筛选状态 ===
   const [unitFilter, setUnitFilter] = useState<string | null>(null)
@@ -229,17 +245,24 @@ function CashflowsTab({
 
   return (
     <div>
-      <h3 style={{ marginBottom: 0 }}>
-        资产现金流
-        {selectedHolding && (
-          <Tag color="processing" style={{ marginLeft: 8, fontSize: 14, padding: '4px 12px' }}>
-            {selectedHolding.asset_code} · {selectedHolding.asset_name}
-          </Tag>
-        )}
-      </h3>
-      <p style={{ color: '#999', marginTop: 4 }}>
-        按期预测的资产端现金流（息票/本金） · 与资产持仓的 <code>holding_id</code> 关联
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h3 style={{ marginBottom: 0 }}>
+            资产现金流
+            {selectedHolding && (
+              <Tag color="processing" style={{ marginLeft: 8, fontSize: 14, padding: '4px 12px' }}>
+                {selectedHolding.asset_code} · {selectedHolding.asset_name}
+              </Tag>
+            )}
+          </h3>
+          <p style={{ color: '#999', marginTop: 4, marginBottom: 0 }}>
+            按期预测的资产端现金流（息票/本金） · 与资产持仓的 <code>holding_id</code> 关联
+          </p>
+        </div>
+        <Button type="primary" icon={<ExperimentOutlined />} onClick={onEngine}>
+          引擎重算
+        </Button>
+      </div>
 
       {/* === 筛选区 === */}
       <Card style={{ marginTop: 16 }}>
