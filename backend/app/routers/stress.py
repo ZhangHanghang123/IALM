@@ -1,6 +1,7 @@
 """IALM 压力测试 API（监管预置情景 + 用户自定义情景 + 结果）"""
-from typing import Optional
-from fastapi import APIRouter, Depends, Query
+import json
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -27,14 +28,130 @@ def list_scenarios(
         {"limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
     total = db.execute(text("SELECT COUNT(*) FROM ialm_stress_scenario WHERE is_deleted = 0")).scalar() or 0
-    return {
-        "total": total,
-        "items": [
-            {"id": r[0], "scenario_code": r[1], "scenario_name": r[2], "scenario_type": r[3],
-             "source": r[4], "description": r[5], "shocks_json": r[6], "is_active": r[7]}
-            for r in rows
-        ],
-    }
+    items = []
+    for r in rows:
+        try:
+            shocks = json.loads(r[6]) if r[6] else {"factors": []}
+        except Exception:
+            shocks = {"factors": []}
+        items.append({
+            "id": r[0], "scenario_code": r[1], "scenario_name": r[2], "scenario_type": r[3],
+            "source": r[4], "description": r[5], "shocks_json": shocks, "is_active": r[7],
+        })
+    return {"total": total, "items": items}
+
+
+# ═══ 1.1 创建自定义情景 ═══
+class ScenarioCreate(BaseModel):
+    scenario_code: str
+    scenario_name: str
+    scenario_type: str
+    source: str = "CUSTOM"
+    description: str = ""
+    shocks_json: Dict[str, Any]
+
+
+@router.post("/scenarios")
+def create_scenario(
+    body: ScenarioCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """创建自定义压力情景"""
+    exists = db.execute(
+        text("SELECT id FROM ialm_stress_scenario WHERE scenario_code = :c AND is_deleted = 0"),
+        {"c": body.scenario_code},
+    ).fetchone()
+    if exists:
+        raise HTTPException(400, detail=f"情景编码 {body.scenario_code} 已存在")
+    rid = db.execute(
+        text("""INSERT INTO ialm_stress_scenario
+              (scenario_code, scenario_name, scenario_type, source, description,
+               shocks_json, is_active, is_deleted, created_by, updated_by, created_at, updated_at)
+              VALUES (:c, :n, :t, :s, :d, :j, 1, 0, :u, :u, NOW, NOW)"""),
+        {
+            "c": body.scenario_code,
+            "n": body.scenario_name,
+            "t": body.scenario_type,
+            "s": body.source,
+            "d": body.description,
+            "j": json.dumps(body.shocks_json, ensure_ascii=False),
+            "u": user.get("sub", "system"),
+        },
+    ).lastrowid
+    db.commit()
+    return {"id": rid, "scenario_code": body.scenario_code}
+
+
+# ═══ 1.2 修改情景（监管 + 自定义均可） ═══
+class ScenarioUpdate(BaseModel):
+    scenario_name: Optional[str] = None
+    scenario_type: Optional[str] = None
+    description: Optional[str] = None
+    shocks_json: Optional[Dict[str, Any]] = None
+    is_active: Optional[int] = None
+
+
+@router.put("/scenarios/{scenario_id}")
+def update_scenario(
+    scenario_id: int,
+    body: ScenarioUpdate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """修改压力情景配置（用户可在监管预置基础上调整）"""
+    exists = db.execute(
+        text("SELECT id, source FROM ialm_stress_scenario WHERE id = :id AND is_deleted = 0"),
+        {"id": scenario_id},
+    ).fetchone()
+    if not exists:
+        raise HTTPException(404, detail="情景不存在")
+
+    updates = []
+    params: Dict[str, Any] = {"id": scenario_id, "u": user.get("sub", "system")}
+    if body.scenario_name is not None:
+        updates.append("scenario_name = :n"); params["n"] = body.scenario_name
+    if body.scenario_type is not None:
+        updates.append("scenario_type = :t"); params["t"] = body.scenario_type
+    if body.description is not None:
+        updates.append("description = :d"); params["d"] = body.description
+    if body.shocks_json is not None:
+        updates.append("shocks_json = :j"); params["j"] = json.dumps(body.shocks_json, ensure_ascii=False)
+    if body.is_active is not None:
+        updates.append("is_active = :a"); params["a"] = body.is_active
+
+    if not updates:
+        return {"updated": 0, "id": scenario_id}
+
+    updates.append("updated_by = :u")
+    updates.append("updated_at = NOW()")
+    sql = f"UPDATE ialm_stress_scenario SET {', '.join(updates)} WHERE id = :id"
+    db.execute(text(sql), params)
+    db.commit()
+    return {"updated": 1, "id": scenario_id}
+
+
+# ═══ 1.3 软删除情景 ═══
+@router.delete("/scenarios/{scenario_id}")
+def delete_scenario(
+    scenario_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    row = db.execute(
+        text("SELECT source FROM ialm_stress_scenario WHERE id = :id AND is_deleted = 0"),
+        {"id": scenario_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, detail="情景不存在")
+    if row[0] == "REG":
+        raise HTTPException(400, detail="监管预置情景不允许删除（可修改或停用）")
+    db.execute(
+        text("UPDATE ialm_stress_scenario SET is_deleted = 1, updated_by = :u, updated_at = NOW() WHERE id = :id"),
+        {"u": user.get("sub", "system"), "id": scenario_id},
+    )
+    db.commit()
+    return {"deleted": True, "id": scenario_id}
 
 
 # ═══ 2. 压力测试结果 ═══

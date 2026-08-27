@@ -88,6 +88,9 @@ export const marketDataApi = {
 // ═══ 压力测试 ═══
 export const stressApi = {
   scenarios: (params?: any) => api.get('/stress/scenarios', { params }),
+  createScenario: (data: any) => api.post('/stress/scenarios', data),
+  updateScenario: (id: number, data: any) => api.put(`/stress/scenarios/${id}`, data),
+  deleteScenario: (id: number) => api.delete(`/stress/scenarios/${id}`),
   results: (params?: any) => api.get('/stress/results', { params }),
   run: (data: any) => api.post('/stress/run', data),
 }
