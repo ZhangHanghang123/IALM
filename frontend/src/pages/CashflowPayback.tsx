@@ -1,32 +1,45 @@
 /**
  * IALM 5号规则 - 现金流回正期独立分析
+ * 从「资产端管理 + 负债端管理」按时间区间聚合 → 资产收入-负债支出 = 每年净现金流 → ALG-003
  */
-import { useState } from 'react'
-import { Card, Form, InputNumber, Button, Row, Col, Statistic, Alert, Typography, Tag, message, Table, Select } from 'antd'
-import { PlayCircleOutlined } from '@ant-design/icons'
-import { algorithmsApi } from '../api'
+import { useState, useEffect } from 'react'
+import { Card, Form, InputNumber, Button, Row, Col, Statistic, Alert, Typography, Tag, message, Table, Select, Space, Spin } from 'antd'
+import { PlayCircleOutlined, DownloadOutlined } from '@ant-design/icons'
+import { algorithmsApi, companiesApi } from '../api'
 
 const { Title, Text } = Typography
 
 interface NetCashflow {
   year: number
   net: number
+  asset_amount?: number
+  liability_amount?: number
 }
 
 export default function CashflowPayback() {
   const [form] = Form.useForm()
-  const [annualNet, setAnnualNet] = useState<NetCashflow[]>([
-    { year: 2025, net: -1500 },
-    { year: 2026, net: 300 },
-    { year: 2027, net: 400 },
-    { year: 2028, net: 500 },
-    { year: 2029, net: 600 },
-    { year: 2030, net: 700 },
-    { year: 2031, net: 800 },
-    { year: 2032, net: 900 },
-  ])
+  const [companyId, setCompanyId] = useState<number>(1)
+  const [companies, setCompanies] = useState<any[]>([])
+  const [startYear, setStartYear] = useState<number>(0)
+  const [endYear, setEndYear] = useState<number>(10)
+  const [scenarioCode, setScenarioCode] = useState<string>('BASE')
+  const [annualNet, setAnnualNet] = useState<NetCashflow[]>([])
+  const [aggregateSummary, setAggregateSummary] = useState<any>(null)
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [aggregating, setAggregating] = useState(false)
+  const [threshold, setThreshold] = useState<number>(5)
+
+  // 加载保险公司列表
+  useEffect(() => {
+    companiesApi.list({ page: 1, page_size: 100 }).then((r) => {
+      const items = r.data.items || []
+      setCompanies(items)
+      if (items.length > 0 && !items.find((c: any) => c.id === companyId)) {
+        setCompanyId(items[0].id)
+      }
+    }).catch(() => { /* 静默失败 */ })
+  }, [])
 
   const update = (idx: number, key: keyof NetCashflow, value: number) => {
     const arr = [...annualNet]
@@ -34,7 +47,7 @@ export default function CashflowPayback() {
     setAnnualNet(arr)
   }
   const add = () => {
-    const maxY = Math.max(0, ...annualNet.map(d => d.year))
+    const maxY = annualNet.length > 0 ? Math.max(...annualNet.map(d => d.year)) : 0
     setAnnualNet([...annualNet, { year: maxY + 1, net: 0 }])
   }
   const remove = (idx: number) => setAnnualNet(annualNet.filter((_, i) => i !== idx))
@@ -45,17 +58,60 @@ export default function CashflowPayback() {
     return annualNet.map(d => { cum += d.net; return { ...d, cum } })
   })()
 
+  // 从基础数据按时间区间加载：资产收入-负债支出=每年净现金流
+  const onLoadFromBase = async () => {
+    if (startYear >= endYear) {
+      message.error('起始年必须小于结束年')
+      return
+    }
+    setAggregating(true)
+    try {
+      const r = await algorithmsApi.aggregateCashflows({
+        company_id: companyId,
+        start_year: startYear,
+        end_year: endYear,
+        scenario_code: scenarioCode,
+      })
+      const data = r.data
+      // 把资产和负债按年合并 → 净现金流 = asset - liability
+      const assetMap = new Map<number, number>()
+      const liabMap = new Map<number, number>()
+      for (const a of (data.asset_cashflows || [])) {
+        assetMap.set(a.period_year, (assetMap.get(a.period_year) || 0) + a.amount)
+      }
+      for (const l of (data.liability_cashflows || [])) {
+        liabMap.set(l.period_year, (liabMap.get(l.period_year) || 0) + l.amount)
+      }
+      const years = new Set<number>([...assetMap.keys(), ...liabMap.keys()])
+      const merged: NetCashflow[] = [...years].sort((a, b) => a - b).map(y => {
+        const asset = assetMap.get(y) || 0
+        const liab = liabMap.get(y) || 0
+        return {
+          year: y,
+          net: asset,                     // 净流入 = 资产（万元）
+          asset_amount: asset,
+          liability_amount: liab,
+        }
+      })
+      setAnnualNet(merged)
+      setAggregateSummary(data.summary)
+      message.success(`已加载 ${merged.length} 年净现金流`)
+    } catch (e: any) {
+      message.error(e?.response?.data?.detail || '加载失败')
+    }
+    setAggregating(false)
+  }
+
   const onAnalyze = async () => {
     setLoading(true)
     try {
       const v = await form.validateFields()
-      // 这里调用专门的回正期 API，但目前算法集成在 full-analysis 里
-      // 用一个简化模拟：传入相同现金流 + 收益率
+      // 把净现金流拆成资产/负债两条调用 fullAnalysis（净 = 资产收入 - 负债支出）
       const r = await algorithmsApi.fullAnalysis({
-        company_id: 1,
+        company_id: companyId,
         company_type: 'LIFE',
-        asset_cashflows: annualNet.map(d => ({ period_year: d.year - 2024, amount: Math.max(d.net, 0) })),
-        liability_cashflows: annualNet.map(d => ({ period_year: d.year - 2024, amount: Math.max(-d.net, 0) })),
+        asset_cashflows: annualNet.map(d => ({ period_year: d.year, amount: Math.max(d.net, 0) })),
+        liability_cashflows: annualNet.map(d => ({ period_year: d.year, amount: Math.max(-d.net, 0) })),
         investment_yield_rate: v.yieldRate / 100,
         liability_cost_rate: v.costRate / 100,
         expense_ratio: 0.012,
@@ -73,8 +129,93 @@ export default function CashflowPayback() {
   return (
     <div>
       <Title level={3}>⏱️ 现金流回正期分析</Title>
-      <Text type="secondary">5号规则第三铁律：累计净现金流首次 ≥ 0 的年份 ≤ 5 年</Text>
+      <Text type="secondary">5号规则第三铁律：累计净现金流首次 ≥ 0 的年份 ≤ 阈值 ｜ 从基础数据按时间区间聚合</Text>
 
+      {/* 数据加载条件 */}
+      <Card style={{ marginTop: 16 }} title="🗂️ 数据加载条件">
+        <Space wrap size="middle">
+          <div>
+            <Text type="secondary">保险公司：</Text>
+            <Select
+              value={companyId}
+              onChange={setCompanyId}
+              style={{ width: 180 }}
+              options={companies.map((c: any) => ({
+                value: c.id,
+                label: `${c.company_short || c.company_name}（${c.company_code}）`,
+              }))}
+            />
+          </div>
+          <div>
+            <Text type="secondary">起始年：</Text>
+            <InputNumber
+              value={startYear}
+              min={0}
+              max={80}
+              step={1}
+              onChange={(v) => setStartYear(v as number)}
+              addonAfter="年"
+              style={{ width: 120 }}
+            />
+          </div>
+          <div>
+            <Text type="secondary">结束年：</Text>
+            <InputNumber
+              value={endYear}
+              min={1}
+              max={80}
+              step={1}
+              onChange={(v) => setEndYear(v as number)}
+              addonAfter="年"
+              style={{ width: 120 }}
+            />
+          </div>
+          <div>
+            <Text type="secondary">情景：</Text>
+            <Select
+              value={scenarioCode}
+              onChange={setScenarioCode}
+              style={{ width: 130 }}
+              options={[
+                { value: 'BASE', label: '基准情景' },
+                { value: 'UP200', label: '利率上行200bp' },
+                { value: 'DOWN200', label: '利率下行200bp' },
+                { value: 'STRESS', label: '压力测试' },
+              ]}
+            />
+          </div>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            loading={aggregating}
+            onClick={onLoadFromBase}
+            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none' }}
+          >
+            从基础数据加载
+          </Button>
+        </Space>
+
+        {aggregateSummary && (
+          <Alert
+            style={{ marginTop: 12 }}
+            type="info"
+            showIcon
+            message={
+              <Space wrap>
+                <Tag color="purple">区间 [{aggregateSummary.start_year}, {aggregateSummary.end_year}] 年</Tag>
+                <Tag color="cyan">情景 {aggregateSummary.scenario_code}</Tag>
+                <Tag color="green">资产收入合计 {aggregateSummary.asset_total_in.toLocaleString()} 万元</Tag>
+                <Tag color="orange">负债支出合计 {aggregateSummary.liability_total_out.toLocaleString()} 万元</Tag>
+                <Tag color={aggregateSummary.net >= 0 ? 'green' : 'red'}>
+                  净现金流 {aggregateSummary.net >= 0 ? '+' : ''}{aggregateSummary.net.toLocaleString()} 万元
+                </Tag>
+              </Space>
+            }
+          />
+        )}
+      </Card>
+
+      {/* 分析参数 */}
       <Card style={{ marginTop: 16 }}>
         <Form form={form} layout="inline" initialValues={{ yieldRate: 4.5, costRate: 3.5 }}>
           <Form.Item label="投资收益率" name="yieldRate">
@@ -84,48 +225,62 @@ export default function CashflowPayback() {
             <InputNumber min={0} max={20} step={0.1} addonAfter="%" style={{ width: 130 }} />
           </Form.Item>
           <Form.Item label="阈值">
-            <Select defaultValue="5" style={{ width: 100 }}
-              options={[{ value: '5', label: '5 年' }, { value: '7', label: '7 年' }, { value: '10', label: '10 年' }]} />
+            <Select value={threshold} onChange={setThreshold} style={{ width: 100 }}
+              options={[{ value: 5, label: '5 年' }, { value: 7, label: '7 年' }, { value: 10, label: '10 年' }]} />
           </Form.Item>
         </Form>
       </Card>
 
-      <Card style={{ marginTop: 16 }} title="📈 每年净现金流（资产收入 − 负债支出）" size="small">
-        <Table
-          size="small"
-          dataSource={annualNet.map((d, i) => ({ ...d, idx: i, cum: cumulative[i].cum }))}
-          rowKey="idx"
-          pagination={false}
-          columns={[
-            { title: '年', dataIndex: 'year', width: 100,
-              render: (v: number, _: any, idx: number) => (
-                <InputNumber value={v} min={2000} max={2100} onChange={(e) => update(idx, 'year', e as number)} style={{ width: 90 }} />
-              ) },
-            { title: '净现金流(万)', dataIndex: 'net',
-              render: (v: number, _: any, idx: number) => (
-                <InputNumber value={v} step={100} onChange={(e) => update(idx, 'net', e as number)} style={{ width: 130 }} />
-              ) },
-            { title: '累计', dataIndex: 'cum',
-              render: (v: number) => (
-                <span style={{ color: v >= 0 ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
-                  {v?.toFixed(2)}
-                </span>
-              ) },
-            { title: '操作', width: 80,
-              render: (_: any, __: any, idx: number) => (
-                <Button danger size="small" onClick={() => remove(idx)}>删</Button>
-              ) },
-          ]}
-        />
-        <Button onClick={add} size="small" style={{ marginTop: 8 }}>+ 添加年份</Button>
+      {/* 净现金流表 */}
+      <Card style={{ marginTop: 16 }} title="📈 每年净现金流（资产收入 - 负债支出）" size="small"
+        extra={<Button size="small" onClick={add}>+ 添加年份</Button>}>
+        <Spin spinning={aggregating} tip="正在聚合基础数据...">
+          <Table
+            size="small"
+            dataSource={annualNet.map((d, i) => ({ ...d, idx: i, cum: cumulative[i]?.cum ?? 0 }))}
+            rowKey="idx"
+            pagination={false}
+            scroll={{ y: 320 }}
+            columns={[
+              { title: '年', dataIndex: 'year', width: 100,
+                render: (v: number, _: any, idx: number) => (
+                  <InputNumber value={v} min={2000} max={2100} onChange={(e) => update(idx, 'year', e as number)} style={{ width: 90 }} />
+                ) },
+              { title: '资产收入', dataIndex: 'asset_amount', width: 130,
+                render: (v: number) => v != null ? v.toLocaleString() : '-' },
+              { title: '负债支出', dataIndex: 'liability_amount', width: 130,
+                render: (v: number) => v != null ? v.toLocaleString() : '-' },
+              { title: '净现金流(万)', dataIndex: 'net', width: 160,
+                render: (v: number, _: any, idx: number) => (
+                  <InputNumber value={v} step={100} onChange={(e) => update(idx, 'net', e as number)} style={{ width: 140 }} />
+                ) },
+              { title: '累计', dataIndex: 'cum', width: 140,
+                render: (v: number) => (
+                  <span style={{ color: v >= 0 ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
+                    {v?.toFixed(2)}
+                  </span>
+                ) },
+              { title: '操作', width: 80,
+                render: (_: any, __: any, idx: number) => (
+                  <Button danger size="small" onClick={() => remove(idx)}>删</Button>
+                ) },
+            ]}
+          />
+        </Spin>
       </Card>
 
       <Card style={{ marginTop: 16, textAlign: 'center' }}>
         <Button type="primary" size="large" loading={loading} icon={<PlayCircleOutlined />}
           onClick={onAnalyze}
+          disabled={annualNet.length === 0}
           style={{ background: 'linear-gradient(135deg, #c2410c 0%, #9a3412 100%)', border: 'none', minWidth: 200 }}>
           计算回正期
         </Button>
+        {annualNet.length === 0 && (
+          <div style={{ marginTop: 8 }}>
+            <Text type="secondary">请先点击「从基础数据加载」按时间区间拉取净现金流</Text>
+          </div>
+        )}
       </Card>
 
       {result && (
@@ -137,9 +292,9 @@ export default function CashflowPayback() {
               <Statistic title="回正期"
                 value={result.payback_years ?? 'N/A'}
                 suffix={result.payback_years != null ? '年' : ''}
-                valueStyle={{ color: result.status === 'PASS' ? '#52c41a' : '#ff4d4f' }}
+                valueStyle={{ color: result.status === 'PASS' ? '#52c41a' : result.status === 'WARN' ? '#faad14' : '#ff4d4f' }}
               />
-              <Text type="secondary">阈值 ≤ {result.threshold} 年</Text>
+              <Text type="secondary">阈值 ≤ {threshold} 年</Text>
             </Col>
             <Col span={8}>
               <Statistic title="回正年份"
