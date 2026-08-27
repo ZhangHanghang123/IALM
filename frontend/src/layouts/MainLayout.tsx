@@ -78,10 +78,7 @@ const menuItems = [
     label: '风险与监管',
     icon: <AlertOutlined />,
     children: [
-      { key: '/risk-preferences', label: '风险偏好' },
-      { key: '/risk-indicators', label: '风险指标' },
-      { key: '/risk-events', label: '风险事件' },
-      { key: '/regulatory-reports', label: '监管报表' },
+      { key: '/risk-indicators', label: '风险指标与监管' },
     ],
   },
   {
