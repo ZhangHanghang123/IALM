@@ -65,24 +65,24 @@ def full_analysis(
     )
 
     if body.save_to_db:
-        # 持久化到 ialm_match_analysis
+        # 持久化到 ialm_match_analysis（按实际 schema 写入）
+        now = __import__("datetime").datetime.utcnow()
+        status_warn = lambda s: 1 if s in ("WARN", "FAIL") else 0
         rec = IalmMatchAnalysis(
             company_id=body.company_id,
-            analysis_date=__import__("datetime").datetime.utcnow(),
-            period_label="ON_DEMAND",
+            report_date=now,
+            scenario_code="BASE",
             duration_match_ratio=result["alg_001_duration_match"].get("match_ratio"),
-            duration_match_status=result["alg_001_duration_match"].get("status"),
+            duration_match_warning=status_warn(result["alg_001_duration_match"].get("status")),
             cost_yield_ratio=result["alg_002_cost_yield"].get("ratio"),
-            cost_yield_status=result["alg_002_cost_yield"].get("status"),
-            cashflow_payback_years=result["alg_003_cashflow_payback"].get("payback_years"),
-            cashflow_payback_status=result["alg_003_cashflow_payback"].get("status"),
+            cost_yield_zone=result["alg_002_cost_yield"].get("status"),
+            cashflow_payback_years=result["alg_003_cashflow_payback"].get("payback_years") or 0,
+            payback_warning=status_warn(result["alg_003_cashflow_payback"].get("status")),
             asset_duration=result["alg_004_duration_gap"].get("asset_duration"),
             liability_duration=result["alg_004_duration_gap"].get("liability_duration"),
             duration_gap_years=result["alg_004_duration_gap"].get("duration_gap"),
-            duration_gap_status=result["alg_004_duration_gap"].get("status"),
-            overall_status=result["overall_status"],
             detail_json=__import__("json").dumps(result, ensure_ascii=False),
-            algorithm_version="v1.0.0",
+            exec_status="COMPLETED",
             created_by=user.get("sub", "system"),
         )
         db.add(rec)
@@ -300,28 +300,46 @@ def analysis_history(
     _: dict = Depends(get_current_user),
 ):
     """历史 5 号规则分析记录"""
-    q = db.query(IalmMatchAnalysis).filter(IalmMatchAnalysis.is_deleted == 0)
+    q = db.query(IalmMatchAnalysis)
     if company_id:
         q = q.filter(IalmMatchAnalysis.company_id == company_id)
     total = q.count()
     items = q.order_by(IalmMatchAnalysis.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+
+    def derive_status(warning: int) -> str:
+        return "WARN" if warning else "PASS"
+
+    def derive_overall(warnings: list[int]) -> str:
+        if any(w == 2 for w in warnings):  # 预留 FAIL
+            return "FAIL"
+        if any(w == 1 for w in warnings):
+            return "WARN"
+        return "PASS"
+
     return {
         "total": total,
         "items": [
             {
                 "id": r.id,
                 "company_id": r.company_id,
-                "analysis_date": r.analysis_date.isoformat() if r.analysis_date else None,
+                "analysis_date": r.report_date.isoformat() if r.report_date else None,
+                "report_date": r.report_date.isoformat() if r.report_date else None,
                 "duration_match_ratio": float(r.duration_match_ratio) if r.duration_match_ratio else None,
-                "duration_match_status": r.duration_match_status,
+                "duration_match_status": derive_status(r.duration_match_warning or 0),
                 "cost_yield_ratio": float(r.cost_yield_ratio) if r.cost_yield_ratio else None,
-                "cost_yield_status": r.cost_yield_status,
+                "cost_yield_zone": r.cost_yield_zone,
+                "cost_yield_status": (r.cost_yield_zone or "PASS"),
                 "cashflow_payback_years": float(r.cashflow_payback_years) if r.cashflow_payback_years else None,
-                "cashflow_payback_status": r.cashflow_payback_status,
+                "cashflow_payback_status": derive_status(r.payback_warning or 0),
                 "duration_gap_years": float(r.duration_gap_years) if r.duration_gap_years else None,
-                "duration_gap_status": r.duration_gap_status,
-                "overall_status": r.overall_status,
-                "algorithm_version": r.algorithm_version,
+                "asset_duration": float(r.asset_duration) if r.asset_duration else None,
+                "liability_duration": float(r.liability_duration) if r.liability_duration else None,
+                "overall_status": derive_overall([
+                    r.duration_match_warning or 0,
+                    r.payback_warning or 0,
+                ]),
+                "exec_status": r.exec_status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in items
         ],
