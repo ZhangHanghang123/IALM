@@ -43,12 +43,17 @@ export default function CashflowPayback() {
 
   const update = (idx: number, key: keyof NetCashflow, value: number) => {
     const arr = [...annualNet]
-    arr[idx] = { ...arr[idx], [key]: value }
+    const row = { ...arr[idx], [key]: value }
+    // 当资产收入或负债支出变化时，自动重算净现金流
+    if (key === 'asset_amount' || key === 'liability_amount') {
+      row.net = (row.asset_amount ?? 0) - (row.liability_amount ?? 0)
+    }
+    arr[idx] = row
     setAnnualNet(arr)
   }
   const add = () => {
     const maxY = annualNet.length > 0 ? Math.max(...annualNet.map(d => d.year)) : 0
-    setAnnualNet([...annualNet, { year: maxY + 1, net: 0 }])
+    setAnnualNet([...annualNet, { year: maxY + 1, net: 0, asset_amount: 0, liability_amount: 0 }])
   }
   const remove = (idx: number) => setAnnualNet(annualNet.filter((_, i) => i !== idx))
 
@@ -73,7 +78,7 @@ export default function CashflowPayback() {
         scenario_code: scenarioCode,
       })
       const data = r.data
-      // 把资产和负债按年合并 → 净现金流 = asset - liability
+      // 把资产和负债按年合并 → 净现金流 = 资产收入 - 负债支出
       const assetMap = new Map<number, number>()
       const liabMap = new Map<number, number>()
       for (const a of (data.asset_cashflows || [])) {
@@ -88,7 +93,7 @@ export default function CashflowPayback() {
         const liab = liabMap.get(y) || 0
         return {
           year: y,
-          net: asset,                     // 净流入 = 资产（万元）
+          net: asset - liab,               // 净现金流 = 资产收入 - 负债支出（万元）
           asset_amount: asset,
           liability_amount: liab,
         }
@@ -232,7 +237,7 @@ export default function CashflowPayback() {
       </Card>
 
       {/* 净现金流表 */}
-      <Card style={{ marginTop: 16 }} title="📈 每年净现金流（资产收入 - 负债支出）" size="small"
+      <Card style={{ marginTop: 16 }} title="📈 每年净现金流（净现金流 = 资产收入 − 负债支出，由基础数据聚合得出）" size="small"
         extra={<Button size="small" onClick={add}>+ 添加年份</Button>}>
         <Spin spinning={aggregating} tip="正在聚合基础数据...">
           <Table
@@ -246,15 +251,33 @@ export default function CashflowPayback() {
                 render: (v: number, _: any, idx: number) => (
                   <InputNumber value={v} min={2000} max={2100} onChange={(e) => update(idx, 'year', e as number)} style={{ width: 90 }} />
                 ) },
-              { title: '资产收入', dataIndex: 'asset_amount', width: 130,
-                render: (v: number) => v != null ? v.toLocaleString() : '-' },
-              { title: '负债支出', dataIndex: 'liability_amount', width: 130,
-                render: (v: number) => v != null ? v.toLocaleString() : '-' },
-              { title: '净现金流(万)', dataIndex: 'net', width: 160,
+              { title: '资产收入(万)', dataIndex: 'asset_amount', width: 150,
                 render: (v: number, _: any, idx: number) => (
-                  <InputNumber value={v} step={100} onChange={(e) => update(idx, 'net', e as number)} style={{ width: 140 }} />
+                  <InputNumber
+                    value={v ?? 0}
+                    step={100}
+                    onChange={(e) => update(idx, 'asset_amount', e as number)}
+                    style={{ width: 130 }}
+                    formatter={(val) => val?.toLocaleString()}
+                  />
                 ) },
-              { title: '累计', dataIndex: 'cum', width: 140,
+              { title: '负债支出(万)', dataIndex: 'liability_amount', width: 150,
+                render: (v: number, _: any, idx: number) => (
+                  <InputNumber
+                    value={v ?? 0}
+                    step={100}
+                    onChange={(e) => update(idx, 'liability_amount', e as number)}
+                    style={{ width: 130 }}
+                    formatter={(val) => val?.toLocaleString()}
+                  />
+                ) },
+              { title: '净现金流(万)', dataIndex: 'net', width: 150,
+                render: (v: number) => (
+                  <span style={{ color: v >= 0 ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
+                    {v?.toLocaleString() ?? '-'}
+                  </span>
+                ) },
+              { title: '累计(万)', dataIndex: 'cum', width: 150,
                 render: (v: number) => (
                   <span style={{ color: v >= 0 ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
                     {v?.toFixed(2)}
