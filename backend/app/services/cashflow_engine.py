@@ -160,7 +160,7 @@ class AssetCashflowEngine:
                        h.interest_payment_unit, h.principal_payment_freq, h.principal_payment_unit,
                        h.duration_year, ac.category_code
                 FROM ialm_asset_holding h
-                LEFT JOIN ialm_asset_category ac ON ac.id = h.asset_category_id AND ac.is_deleted = 0
+                LEFT JOIN ialm_asset_category ac ON ac.id = h.category_id AND ac.is_deleted = 0
                 WHERE h.company_id = :cid AND h.is_deleted = 0"""),
             {"cid": company_id},
         ).fetchall()
@@ -375,7 +375,7 @@ class LiabilityCashflowEngine:
             text("""SELECT pm.id, pm.company_id, pm.product_type_id, pm.sum_insured,
                        pm.annual_premium, pm.single_premium, pm.payment_period, pm.insurance_period,
                        pm.effective_date, pm.insured_age, pm.insured_gender,
-                       pt.category_code
+                       pt.product_type_code AS category_code
                 FROM ialm_policy_master pm
                 LEFT JOIN ialm_product_category pt ON pt.id = pm.product_type_id AND pt.is_deleted = 0
                 WHERE pm.company_id = :cid AND pm.is_deleted = 0"""),
