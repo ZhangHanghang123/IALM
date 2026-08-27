@@ -135,6 +135,7 @@ def base_parameters(
     liability_value = sum(float(r[1] or 0) for r in liab_rows)
 
     duration_by_type = {
+        # 英文编码
         "LIFE": 12.0,
         "UNIVERSAL_LIFE": 10.0,
         "ANNUITY": 15.0,
@@ -143,6 +144,15 @@ def base_parameters(
         "CLAIM": 1.0,
         "UN_EARNED_PREMIUM": 1.5,
         "UN_DERIVED": 0.5,
+        # 中文准备金类型（实际数据）
+        "寿险责任准备金": 12.0,
+        "健康险责任准备金": 4.0,
+        "年金准备金": 15.0,
+        "未到期责任准备金": 1.5,
+        "未决赔款准备金": 1.0,
+        "IBNR 已发生未报告准备金": 1.0,
+        "长寿风险准备金": 14.0,
+        "红利准备金": 8.0,
     }
     weighted_liab_dur = 0.0
     for r in liab_rows:
