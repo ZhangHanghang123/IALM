@@ -2,7 +2,7 @@
  * IALM 投资组合（Markowitz + Black-Litterman + 资产配置 + 业绩归因）
  */
 import { useState, useEffect } from 'react'
-import { Card, Tabs, Form, InputNumber, Button, Row, Col, Statistic, Table, Typography, Alert, message } from 'antd'
+import { Card, Tabs, Form, InputNumber, Button, Row, Col, Statistic, Table, Typography, Alert, message, Tag } from 'antd'
 import { FundOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import DataListPage from '../components/DataListPage'
@@ -131,14 +131,26 @@ function AllocationsPage() {
       fetcher={(p) => portfolioApi.allocations(p)}
       columns={[
         { title: '保险公司', dataIndex: 'company_name', width: 140 },
-        { title: '配置日', dataIndex: 'allocation_date', width: 120 },
+        { title: '报告日', dataIndex: 'report_date', width: 120 },
+        { title: '配置名称', dataIndex: 'allocation_name', width: 240, ellipsis: true },
+        { title: '方法', dataIndex: 'optimization_method', width: 150,
+          render: (v: string) => {
+            const colors: Record<string, string> = {
+              MARKOWITZ: 'blue', BLACK_LITTERMAN: 'purple',
+              EQUAL_WEIGHT: 'default', STRATEGIC: 'cyan',
+            }
+            return <Tag color={colors[v] || 'default'}>{v}</Tag>
+          } },
+        { title: '资产代码', dataIndex: 'asset_code', width: 130 },
         { title: '资产类别', dataIndex: 'asset_class', width: 140 },
-        { title: '权重', dataIndex: 'weight', width: 120,
+        { title: '权重', dataIndex: 'weight', width: 100,
           render: (v: number) => `${(v * 100).toFixed(2)}%` },
-        { title: '基准权重', dataIndex: 'benchmark_weight', width: 120,
+        { title: '预期收益', dataIndex: 'expected_return', width: 100,
           render: (v: number) => `${(v * 100).toFixed(2)}%` },
-        { title: '预期收益', dataIndex: 'expected_return', width: 120,
+        { title: '预期风险', dataIndex: 'expected_risk', width: 100,
           render: (v: number) => `${(v * 100).toFixed(2)}%` },
+        { title: '夏普比', dataIndex: 'sharpe_ratio', width: 100,
+          render: (v: number) => v?.toFixed(4) },
       ]}
     />
   )
@@ -152,7 +164,11 @@ function AttributionsPage() {
       fetcher={(p) => portfolioApi.attributions(p)}
       columns={[
         { title: '保险公司', dataIndex: 'company_name', width: 140 },
-        { title: '归因日', dataIndex: 'attribution_date', width: 120 },
+        { title: '组合', dataIndex: 'portfolio_code', width: 200, ellipsis: true },
+        { title: '区间', width: 200,
+          render: (_: any, r: any) => `${r.period_start} ~ ${r.period_end}` },
+        { title: '周期', dataIndex: 'period_type', width: 90,
+          render: (v: string) => <Tag color="blue">{v}</Tag> },
         { title: '资产类别', dataIndex: 'asset_class', width: 140 },
         { title: '配置效应', dataIndex: 'allocation_effect', width: 120,
           render: (v: number) => (
@@ -172,7 +188,7 @@ function AttributionsPage() {
               {v > 0 ? '+' : ''}{v?.toFixed(4)}
             </span>
           ) },
-        { title: '主动总收益', dataIndex: 'total_active_return', width: 130,
+        { title: '超额总收益(%)', dataIndex: 'total_excess', width: 140,
           render: (v: number) => (
             <b style={{ color: v >= 0 ? '#52c41a' : '#ff4d4f' }}>
               {v > 0 ? '+' : ''}{v?.toFixed(4)}
