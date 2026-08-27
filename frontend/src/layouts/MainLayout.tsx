@@ -63,7 +63,6 @@ const menuItems = [
     children: [
       { key: '/stress-scenarios', label: '监管情景' },
       { key: '/stress-results', label: '测试结果' },
-      { key: '/stress-run', label: '运行模拟' },
     ],
   },
   {
