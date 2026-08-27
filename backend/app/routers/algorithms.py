@@ -213,6 +213,84 @@ def aggregate_cashflows(
     }
 
 
+@router.get("/rule5/current-balance")
+def current_balance(
+    company_id: int = Query(..., description="保险公司ID"),
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """
+    当前资产负债余额（供现金流预测初始化使用）
+
+    资产端：ialm_asset_holding.cost_value 求和（账面价值）
+    负债端：ialm_reserve.amount 求和（准备金）
+
+    返回：
+    - asset_total_book_value:  资产账面价值合计（万元）
+    - liability_reserve_total: 准备金合计（万元）
+    - net_balance:             净资产 = 资产 - 负债（万元）
+    - asset_by_category:       按资产分类拆分 [{category_name, amount, pct}]
+    - liability_by_type:       按准备金类型拆分 [{reserve_type, amount, pct}]
+    """
+    # ═══ 资产账面价值合计 + 按分类拆分 ═══
+    asset_total = db.execute(
+        text("""SELECT COALESCE(SUM(cost_value), 0) FROM ialm_asset_holding
+                WHERE company_id = :cid AND is_deleted = 0"""),
+        {"cid": company_id},
+    ).scalar() or 0
+
+    asset_by_cat = db.execute(
+        text("""SELECT ac.category_name, COALESCE(SUM(h.cost_value), 0) AS amount
+                FROM ialm_asset_holding h
+                LEFT JOIN ialm_asset_category ac ON ac.id = h.category_id AND ac.is_deleted = 0
+                WHERE h.company_id = :cid AND h.is_deleted = 0
+                GROUP BY ac.category_name
+                ORDER BY amount DESC"""),
+        {"cid": company_id},
+    ).fetchall()
+
+    # ═══ 负债准备金合计 + 按类型拆分 ═══
+    liab_total = db.execute(
+        text("""SELECT COALESCE(SUM(amount), 0) FROM ialm_reserve
+                WHERE company_id = :cid AND is_deleted = 0"""),
+        {"cid": company_id},
+    ).scalar() or 0
+
+    liab_by_type = db.execute(
+        text("""SELECT reserve_type, COALESCE(SUM(amount), 0) AS amount
+                FROM ialm_reserve
+                WHERE company_id = :cid AND is_deleted = 0
+                GROUP BY reserve_type
+                ORDER BY amount DESC"""),
+        {"cid": company_id},
+    ).fetchall()
+
+    asset_total_f = float(asset_total)
+    liab_total_f = float(liab_total)
+    return {
+        "company_id": company_id,
+        "asset_total_book_value": round(asset_total_f, 4),
+        "liability_reserve_total": round(liab_total_f, 4),
+        "net_balance": round(asset_total_f - liab_total_f, 4),
+        "asset_by_category": [
+            {
+                "category_name": r[0] or "(未分类)",
+                "amount": round(float(r[1] or 0), 4),
+                "pct": round(float(r[1] or 0) / asset_total_f * 100, 2) if asset_total_f > 0 else 0.0,
+            }
+            for r in asset_by_cat
+        ],
+        "liability_by_type": [
+            {
+                "reserve_type": r[0],
+                "amount": round(float(r[1] or 0), 4),
+                "pct": round(float(r[1] or 0) / liab_total_f * 100, 2) if liab_total_f > 0 else 0.0,
+            }
+            for r in liab_by_type
+        ],
+    }
+
+
 @router.get("/rule5/history")
 def analysis_history(
     company_id: Optional[int] = None,
