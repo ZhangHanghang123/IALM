@@ -272,23 +272,39 @@ def list_stress_results(
 ):
     rows = db.execute(
         text("""SELECT sr.id, sr.company_id, c.company_short AS company_name,
-                     sr.scenario_id, s.scenario_name,
-                     sr.test_date, sr.nav_impact, sr.scr_change, sr.lcr_change, sr.passed
+                     sr.scenario_id, s.scenario_name, s.scenario_code,
+                     sr.report_date, sr.asset_impact, sr.liability_impact,
+                     sr.nav_change, sr.nav_change_pct,
+                     sr.solvency_ratio_before, sr.solvency_ratio_after,
+                     sr.liquidity_gap, sr.liquidity_gap_after,
+                     sr.is_breached, sr.exec_status, sr.exec_elapsed_ms, sr.detail_json
               FROM ialm_stress_result sr
               LEFT JOIN ialm_insurance_company c ON c.id = sr.company_id AND c.is_deleted = 0
               LEFT JOIN ialm_stress_scenario s ON s.id = sr.scenario_id AND s.is_deleted = 0
-              WHERE sr.is_deleted = 0
-              ORDER BY sr.test_date DESC LIMIT :limit OFFSET :offset"""),
+              ORDER BY sr.report_date DESC, sr.id DESC LIMIT :limit OFFSET :offset"""),
         {"limit": page_size, "offset": (page - 1) * page_size},
     ).fetchall()
-    total = db.execute(text("SELECT COUNT(*) FROM ialm_stress_result WHERE is_deleted = 0")).scalar() or 0
+    total = db.execute(text("SELECT COUNT(*) FROM ialm_stress_result")).scalar() or 0
     return {
         "total": total,
         "items": [
-            {"id": r[0], "company_id": r[1], "company_name": r[2], "scenario_id": r[3],
-             "scenario_name": r[4], "test_date": r[5].isoformat() if r[5] else None,
-             "nav_impact": float(r[6] or 0), "scr_change": float(r[7] or 0),
-             "lcr_change": float(r[8] or 0), "passed": r[9]}
+            {
+                "id": r[0], "company_id": r[1], "company_name": r[2],
+                "scenario_id": r[3], "scenario_name": r[4], "scenario_code": r[5],
+                "report_date": r[6].isoformat() if r[6] else None,
+                "asset_impact": float(r[7] or 0),
+                "liability_impact": float(r[8] or 0),
+                "nav_change": float(r[9] or 0),
+                "nav_change_pct": float(r[10] or 0),
+                "solvency_ratio_before": float(r[11] or 0),
+                "solvency_ratio_after": float(r[12] or 0),
+                "liquidity_gap": float(r[13] or 0),
+                "liquidity_gap_after": float(r[14] or 0),
+                "is_breached": r[15],
+                "passed": not bool(r[15]),
+                "exec_status": r[16],
+                "exec_elapsed_ms": int(r[17] or 0),
+            }
             for r in rows
         ],
     }
@@ -361,7 +377,61 @@ def run_stress_simulation(
     scr_change_pct = (nav_change / body.base_scr) * 100 if body.base_scr else 0
     passed = abs(scr_change_pct) < 100  # SCR变化 < 100% 为通过
 
+    # 持久化到 ialm_stress_result（让"测试结果"tab 有数据）
+    import datetime as _dt
+    asset_impact_total = sum(d.get("impact", 0) for d in detail if d.get("factor", "") in ("interest_rate", "investment_yield"))
+    liability_impact_total = sum(d.get("impact", 0) for d in detail if d.get("factor", "") in ("lapse_rate",))
+    solvency_before = A / body.base_scr if body.base_scr else 0
+    solvency_after = (A + nav_change) / body.base_scr if body.base_scr else 0
+    liquidity_gap = D_L * L - D_A * A  # 久期缺口 × 规模（经验估算）
+    liquidity_gap_after = liquidity_gap + nav_change * 0.1
+
+    user_id = user.get("id") or user.get("sub")
+    try:
+        user_id_int = int(user_id) if user_id is not None else None
+    except (ValueError, TypeError):
+        user_id_int = None
+
+    rec = db.execute(
+        text("""INSERT INTO ialm_stress_result
+                (company_id, scenario_id, scenario_code, report_date,
+                 asset_impact, liability_impact, nav_change, nav_change_pct,
+                 solvency_ratio_before, solvency_ratio_after,
+                 liquidity_gap, liquidity_gap_after, is_breached,
+                 detail_json, n_paths, exec_status, exec_elapsed_ms, created_by)
+                VALUES (:cid, :sid, :scode, :rd,
+                        :ai, :li, :nc, :ncp,
+                        :srb, :sra, :lg, :lga, :ibr,
+                        :dj, 0, 'COMPLETED', 0, :uid)"""),
+        {
+            "cid": body.company_id, "sid": body.scenario_id, "scode": row[0],
+            "rd": _dt.date.today(),
+            "ai": round(asset_impact_total, 4),
+            "li": round(liability_impact_total, 4),
+            "nc": round(nav_change, 4),
+            "ncp": round(scr_change_pct, 4),
+            "srb": round(solvency_before, 4),
+            "sra": round(solvency_after, 4),
+            "lg": round(liquidity_gap, 4),
+            "lga": round(liquidity_gap_after, 4),
+            "ibr": 0 if passed else 1,
+            "dj": json.dumps({
+                "shocks_applied": factors,
+                "impacts_per_factor": detail,
+                "input_params": {
+                    "asset_value": A, "liability_value": L,
+                    "asset_duration": D_A, "liability_duration": D_L,
+                    "base_scr": body.base_scr,
+                },
+            }, ensure_ascii=False),
+            "uid": user_id_int,
+        },
+    )
+    db.commit()
+    saved_id = rec.lastrowid
+
     return {
+        "id": saved_id,
         "scenario_code": row[0],
         "scenario_name": row[1],
         "company_id": body.company_id,
