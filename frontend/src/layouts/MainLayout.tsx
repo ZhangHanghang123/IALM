@@ -70,10 +70,7 @@ const menuItems = [
     label: '投资组合',
     icon: <FundOutlined />,
     children: [
-      { key: '/markowitz', label: 'Markowitz 配置' },
-      { key: '/black-litterman', label: 'Black-Litterman' },
-      { key: '/allocations', label: '资产配置' },
-      { key: '/attributions', label: 'Brinson 业绩归因' },
+      { key: '/allocations', label: '资产配置与业绩归因' },
     ],
   },
   {
