@@ -93,6 +93,7 @@ export const stressApi = {
   deleteScenario: (id: number) => api.delete(`/stress/scenarios/${id}`),
   results: (params?: any) => api.get('/stress/results', { params }),
   run: (data: any) => api.post('/stress/run', data),
+  baseParameters: (params: any) => api.get('/stress/base-parameters', { params }),
 }
 
 // ═══ 投资组合 ═══
