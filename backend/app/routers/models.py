@@ -54,8 +54,8 @@ def list_model_versions(
     where_sql = " AND ".join(where)
 
     rows = db.execute(
-        text(f"""SELECT mv.id, mv.model_id, m.model_name, mv.version_no,
-                     mv.release_date, mv.is_production, mv.algorithm_changes, mv.test_status
+        text(f"""SELECT mv.id, mv.model_id, m.model_name, mv.version_code, mv.version_name,
+                     mv.release_date, mv.is_current, mv.changelog
               FROM ialm_model_version mv
               LEFT JOIN ialm_model_definition m ON m.id = mv.model_id AND m.is_deleted = 0
               WHERE {where_sql}
@@ -66,9 +66,10 @@ def list_model_versions(
     return {
         "total": total,
         "items": [
-            {"id": r[0], "model_id": r[1], "model_name": r[2], "version_no": r[3],
-             "release_date": r[4].isoformat() if r[4] else None,
-             "is_production": r[5], "algorithm_changes": r[6], "test_status": r[7]}
+            {"id": r[0], "model_id": r[1], "model_name": r[2],
+             "version_code": r[3], "version_name": r[4],
+             "release_date": r[5].isoformat() if r[5] else None,
+             "is_current": r[6], "changelog": r[7]}
             for r in rows
         ],
     }
