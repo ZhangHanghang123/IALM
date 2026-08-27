@@ -363,8 +363,8 @@ function LiabilityCashflowsTab({
           pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
           locale={{ emptyText: <Empty description={selectedPolicyId ? '该保单暂无现金流' : '请先选择保单'} /> }}
           columns={[
-            { title: '保单号', dataIndex: 'policy_id', width: 100,
-              render: (v: number) => <Tag color="blue">#{v}</Tag> },
+            { title: '保单号', dataIndex: 'policy_no', width: 170,
+              render: (v: string) => <Tag color="blue">{v || '-'}</Tag> },
             { title: '期数', dataIndex: 'period_number', width: 70 },
             { title: '期限', dataIndex: 'period_count', width: 80,
               render: (v: number) => v?.toFixed(0) },

@@ -170,12 +170,14 @@ def list_liability_cashflows(
 
     rows = db.execute(
         text(f"""SELECT cf.id, cf.company_id, cf.product_type_id, cf.policy_id,
+                     pm.policy_no,
                      cf.period_number, cf.period_count, cf.period_unit,
                      pu.unit_name AS period_unit_name, pu.days_per_unit,
                      cf.period_date, cf.period_year, cf.cashflow_type,
                      cf.amount, cf.discount_factor, cf.present_value, cf.scenario_code
               FROM ialm_liability_cashflow cf
               LEFT JOIN ialm_period_unit_dict pu ON pu.unit_code = cf.period_unit AND pu.is_deleted = 0
+              LEFT JOIN ialm_policy_master pm ON pm.id = cf.policy_id AND pm.is_deleted = 0
               WHERE {where_sql}
               ORDER BY cf.policy_id, cf.period_year, cf.period_number LIMIT :limit OFFSET :offset"""),
         {**params, "limit": page_size, "offset": (page - 1) * page_size},
@@ -185,12 +187,13 @@ def list_liability_cashflows(
         "total": total,
         "items": [
             {"id": r[0], "company_id": r[1], "product_type_id": r[2], "policy_id": r[3],
-             "period_number": r[4], "period_count": float(r[5] or 0), "period_unit": r[6],
-             "period_unit_name": r[7], "days_per_unit": float(r[8] or 1),
-             "period_date": r[9].isoformat() if r[9] else None,
-             "period_year": float(r[10] or 0), "cashflow_type": r[11],
-             "amount": float(r[12] or 0), "discount_factor": float(r[13] or 1),
-             "present_value": float(r[14] or 0), "scenario_code": r[15]}
+             "policy_no": r[4],
+             "period_number": r[5], "period_count": float(r[6] or 0), "period_unit": r[7],
+             "period_unit_name": r[8], "days_per_unit": float(r[9] or 1),
+             "period_date": r[10].isoformat() if r[10] else None,
+             "period_year": float(r[11] or 0), "cashflow_type": r[12],
+             "amount": float(r[13] or 0), "discount_factor": float(r[14] or 1),
+             "present_value": float(r[15] or 0), "scenario_code": r[16]}
             for r in rows
         ],
     }
