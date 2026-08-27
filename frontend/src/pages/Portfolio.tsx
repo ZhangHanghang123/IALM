@@ -1,6 +1,7 @@
 /**
  * IALM 投资组合（Markowitz + Black-Litterman + 资产配置 + 业绩归因）
  */
+import { useState, useEffect } from 'react'
 import { Card, Tabs, Form, InputNumber, Button, Row, Col, Statistic, Table, Typography, Alert, message } from 'antd'
 import { FundOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
