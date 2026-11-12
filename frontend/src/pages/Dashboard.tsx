@@ -82,7 +82,7 @@ export default function Dashboard() {
       setPolicies(rPolicies.data?.items || [])
       setAssetCFs(rAssCF.data?.items || [])
       setLiabCFs(rLiabCF.data?.items || [])
-      setAlgorithms(rAlgo.data || [])
+      setAlgorithms(rAlgo.data?.algorithms || rAlgo.data || [])
       setHistory(rHist.data?.items || [])
       setScenarios(rSc.data?.items || [])
       setIndicators(rInd.data?.items || [])
@@ -121,16 +121,23 @@ export default function Dashboard() {
     }
   }, [companies, holdings, policies, algorithms, assetCFs, liabCFs, history, scenarios, indicators, modelVersions, regReports])
 
-  // === 资产配置分布（按 category_code 聚合）===
+  // === 资产配置分布（按 category_code 聚合，Top 10 + 其他）===
   const allocationByCategory = useMemo(() => {
     const map = new Map<string, number>()
     for (const h of holdings) {
       const k = h.category_code || 'OTHER'
       map.set(k, (map.get(k) || 0) + (h.cost_value || 0))
     }
-    return Array.from(map.entries())
+    const sorted = Array.from(map.entries())
       .map(([k, v]) => ({ name: k, value: v }))
       .sort((a, b) => b.value - a.value)
+    // 超过 10 个分类则只取 Top 10，其余合并为"其他"
+    if (sorted.length > 10) {
+      const top10 = sorted.slice(0, 10)
+      const others = sorted.slice(10).reduce((acc, c) => acc + c.value, 0)
+      return [...top10, { name: `其他(${sorted.length - 10})`, value: others }]
+    }
+    return sorted
   }, [holdings])
 
   // === 5号规则历史趋势（按 analysis_date 聚合 PASS 占比）===
